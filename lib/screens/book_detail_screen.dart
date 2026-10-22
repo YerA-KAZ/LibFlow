@@ -4,6 +4,7 @@ import '../services/dummy_books.dart';
 import '../utils/constants.dart';
 import '../widgets/audio_player_sheet.dart';
 import '../widgets/qr_widget.dart';
+import 'book_form_screen.dart';
 import 'ereader_screen.dart';
 
 class BookDetailScreen extends StatefulWidget {
@@ -222,6 +223,42 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(40),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                tooltip: 'Кітапты өңдеу',
+                onPressed: () async {
+                  final updated = await Navigator.push<Book>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => BookFormScreen(
+                        book: _book,
+                        onSave: (editedBook) {
+                          setState(() {
+                            _book = editedBook;
+                          });
+                          widget.onBookUpdated(editedBook);
+                        },
+                      ),
+                    ),
+                  );
+                  if (updated != null) {
+                    setState(() {
+                      _book = updated;
+                    });
+                  }
+                },
+              ),
               IconButton(
                 icon: Container(
                   padding: const EdgeInsets.all(8),

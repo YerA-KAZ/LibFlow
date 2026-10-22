@@ -1,17 +1,115 @@
-# libflow
+# 📚 LibFlow — Онлайн кітапхана және электронды кітаптар мобильді қосымшасы
 
-A new Flutter project.
+**LibFlow** — заманауи кітапхана қызметтерін цифрландыруға, оқырмандардың қажетті кітаптарды жылдам табуына, брондауына, электронды түрде оқуына және аудиокітаптарды тыңдауына арналған Flutter мобильді қосымшасы.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## 🌟 Негізгі мүмкіндіктері
 
-A few resources to get you started if this is your first Flutter project:
+- **🎨 Splash Screen & Брендтік интерфейс:** Біркелкі анимациялармен ашылатын, алтын шапақты және қою жасыл (Emerald / Deep Forest) түстер палитрасындағы ресми сәлемдесу экраны.
+- **🔐 Авторизация және Тіркелу (Auth Screen):** 
+  - Пайдаланушының жүйеге кіруі және жаңа оқырман ретінде тіркелуі.
+  - Деректердің дұрыстығын тексеретін validation жүйесі (Email, құпиясөз, бос өрістерді бақылау).
+- **🏠 Басты экран (Home Screen):** 
+  - Пайдаланушының ағымдағы оқу прогресі (Reading Goals).
+  - Ұсынылатын және трендтегі жаңа кітаптар таңдауы.
+  - Жылдам өту батырмалары мен интерактивті статистика.
+- **📖 Каталог және Сүзгілер (Catalog Screen):**
+  - Жергілікті қордан және онлайн API-дан (Google Books & Open Library) нақты уақытта кітап іздеу.
+  - Жанрлар (Классика, Роман, Тарих, Психология т.б.) бойынша санаттау.
+  - Қолжетімділік, Audio және e-Book бойынша фильтрлер.
+- **📝 Кітап қосу және өңдеу (Create / Edit Book):**
+  - Каталогқа жаңа кітап енгізу немесе бұрынғы кітаптың деректерін өңдеу формасы.
+  - ISBN, бет саны, шыққан жылы, дана саны, аннотациясы және мұқабасын баптау.
+  - Қателерді алдын ала ескертетін қатаң тексерулер (Form Validation).
+- **🔎 Кітаптың толық мәліметі (Book Detail Screen):**
+  - Кітаптың толық аннотациясы, авторы, рейтингі, пікірлері.
+  - **Кітапты брондау (Reserve):** QR-код пен бірегей бронь кодын генерациялау.
+  - Пікір мен 5 жұлдызды бағалау қалдыру.
+- **📱 e-Reader және Аудио ойнатқыш (Audio Player):**
+  - Электронды мәтінді экран өлшеміне бейімдеп оқу.
+  - Аудиокітапты тоқтату/қосу және ұзақтығын бақылау мүмкіндігі бар плеер.
+- **❤️ Таңдаулылар мен Менің кітаптарым (My Books Screen):**
+  - Брондалған кітаптар мен оқырман билетіне алынған кітаптар тізімі.
+  - Қайтару мерзімі (дедлайн) және оқу күйі.
+- **👤 Профиль және Баптаулар (Profile Screen):**
+  - Сандық оқырман билеті (Digital Library Card & QR).
+  - Жарық (Light) және Қараңғы (Dark) тақырыптарын ауыстыру (ThemeMode).
+  - Хабарландыруларды басқару және жүйеден шығу.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 🛠 Технологиялық стек
+
+- **Фреймворк:** [Flutter](https://flutter.dev/) (v3.x / Dart)
+- **UI & Архитектура:** Material Design 3, Reusable Widgets жүйесі, адаптивті өлшемдер
+- **Деректер көздері:**
+  - LibFlow Dummy Service (офлайн/жергілікті деректер)
+  - [Google Books API](https://developers.google.com/books)
+  - [Open Library API](https://openlibrary.org/developers/api)
+- **Тексерулер мен сапа:** `flutter analyze` 100% таза (0 errors, 0 warnings).
+
+---
+
+## 📂 Жобаның құрылымы (`lib/`)
+
+```text
+lib/
+├── main.dart                  # Қосымшаның кіру нүктесі, Theme баптаулары мен навигация
+├── models/
+│   └── book_model.dart        # Кітап пен пікірлердің деректер моделі
+├── screens/
+│   ├── splash_screen.dart     # Қосымшаның кіріспе Splash экраны
+│   ├── auth_screen.dart       # Кіру және тіркелу экраны
+│   ├── home_screen.dart       # Басты ақпараттық экран
+│   ├── catalog_screen.dart    # Сүзгілері бар толық кітап каталогы
+│   ├── book_form_screen.dart  # Кітап қосу/өңдеу формасы (Create/Edit)
+│   ├── book_detail_screen.dart# Кітап туралы толық мәлімет және брондау
+│   ├── ereader_screen.dart    # Электронды кітап оқу экраны
+│   ├── my_books_screen.dart   # Оқырманның сақталған/алынған кітаптары
+│   ├── library_card_screen.dart # QR оқырман билеті экраны
+│   ├── notifications_screen.dart# Дедлайн ескертулері
+│   └── profile_screen.dart    # Жеке кабинет, статистика және баптаулар
+├── services/
+│   ├── books_api_service.dart # Google Books & Open Library интеграциясы
+│   └── dummy_books.dart       # Бастапқы кітапханалық деректер қоры
+├── utils/
+│   └── constants.dart         # Жүйелік тұрақтылар, түстер палитрасы
+└── widgets/
+    ├── audio_player_sheet.dart# Төменнен ашылатын аудиоплеер
+    ├── book_card.dart         # Қайта қолданылатын кітап карточкасы
+    └── qr_widget.dart         # QR-код генераторы виджеті
+```
+
+---
+
+## 🚀 Жобаны іске қосу нұсқаулығы
+
+1. **Репозиторийді көшіріп алыңыз (clone):**
+   ```bash
+   git clone https://github.com/YerA-KAZ/LibFlow.git
+   cd LibFlow
+   ```
+
+2. **Тәуелділіктерді орнатыңыз:**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Код сапасын тексеріңіз:**
+   ```bash
+   flutter analyze
+   ```
+
+4. **Қосымшаны құрылғыда немесе эмуляторда іске қосыңыз:**
+   ```bash
+   flutter run
+   ```
+
+---
+
+## 👨‍💻 Авторы
+
+- **Әзірлеуші:** YerA-KAZ
+- **Жоба:** LibFlow — Smart Library Solution
+- **Жылы:** 2026

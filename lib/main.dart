@@ -5,6 +5,7 @@ import 'screens/catalog_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_books_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/dummy_books.dart';
 import 'utils/constants.dart';
 
@@ -92,6 +93,7 @@ class MainNavigationContainer extends StatefulWidget {
 }
 
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
+  bool _showSplash = true;
   bool _isAuthenticated = true; // Set to true by default for immediate prototype viewing
   int _currentIndex = 0;
   late List<Book> _books;
@@ -111,8 +113,24 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     });
   }
 
+  void _handleBookAdd(Book newBook) {
+    setState(() {
+      _books.insert(0, newBook);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_showSplash) {
+      return SplashScreen(
+        onFinish: () {
+          setState(() {
+            _showSplash = false;
+          });
+        },
+      );
+    }
+
     if (!_isAuthenticated) {
       return AuthScreen(
         onLoginSuccess: () {
@@ -133,6 +151,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       CatalogScreen(
         books: _books,
         onBookUpdated: _handleBookUpdate,
+        onBookAdded: _handleBookAdd,
       ),
       MyBooksScreen(
         books: _books,

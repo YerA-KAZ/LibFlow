@@ -3,17 +3,20 @@ import '../models/book_model.dart';
 import '../services/books_api_service.dart';
 import '../utils/constants.dart';
 import 'book_detail_screen.dart';
+import 'book_form_screen.dart';
 
 enum CatalogSource { all, openLibrary, googleBooks, localOnly }
 
 class CatalogScreen extends StatefulWidget {
   final List<Book> books;
   final Function(Book) onBookUpdated;
+  final Function(Book)? onBookAdded;
 
   const CatalogScreen({
     super.key,
     required this.books,
     required this.onBookUpdated,
+    this.onBookAdded,
   });
 
   @override
@@ -156,6 +159,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            tooltip: 'Жаңа кітап қосу',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BookFormScreen(
+                    onSave: (newBook) {
+                      if (widget.onBookAdded != null) {
+                        widget.onBookAdded!(newBook);
+                      } else {
+                        widget.onBookUpdated(newBook);
+                      }
+                      setState(() {});
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.cloud_sync_rounded),
             tooltip: 'API деректерін жаңарту',
@@ -622,6 +646,29 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Кітап қосу', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookFormScreen(
+                onSave: (newBook) {
+                  if (widget.onBookAdded != null) {
+                    widget.onBookAdded!(newBook);
+                  } else {
+                    widget.onBookUpdated(newBook);
+                  }
+                  setState(() {});
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }
