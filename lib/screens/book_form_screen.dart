@@ -47,6 +47,29 @@ class _BookFormScreenState extends State<BookFormScreen> {
     'Жалпы әдебиет',
   ];
 
+  final List<Map<String, String>> _presetCovers = [
+    {
+      'name': 'Классика',
+      'url': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      'name': 'Тарих',
+      'url': 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      'name': 'Психология',
+      'url': 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      'name': 'IT / Техника',
+      'url': 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      'name': 'Роман',
+      'url': 'https://images.unsplash.com/photo-1532012164546-f432f2e3edd4?w=600&auto=format&fit=crop&q=80',
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +89,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
       text: (b?.totalCopies ?? 5).toString(),
     );
     _coverUrlController = TextEditingController(text: b?.coverUrl ?? '');
+    _coverUrlController.addListener(_onCoverUrlChanged);
     _audioDurationController = TextEditingController(text: b?.audioDuration ?? '1 сағ 45 мин');
     _readingContentController = TextEditingController(
       text: b?.readingContent ??
@@ -80,8 +104,13 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _isAvailable = b?.isAvailable ?? true;
   }
 
+  void _onCoverUrlChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _coverUrlController.removeListener(_onCoverUrlChanged);
     _titleController.dispose();
     _authorController.dispose();
     _descriptionController.dispose();
@@ -416,14 +445,173 @@ class _BookFormScreenState extends State<BookFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Cover URL (optional)
-            TextFormField(
-              controller: _coverUrlController,
-              decoration: _inputDecoration(
-                label: 'Мұқаба суретінің URL (міндетті емес)',
-                hint: 'https://images.unsplash.com/...',
-                icon: Icons.image_rounded,
-                isDark: isDark,
+            // Cover URL with Live Preview & Presets
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Live Cover Preview Box
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 65,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[850] : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.black12,
+                            ),
+                          ),
+                          child: _coverUrlController.text.trim().isNotEmpty
+                              ? Image.network(
+                                  _coverUrlController.text.trim(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.broken_image_rounded, size: 24, color: AppColors.error),
+                                          SizedBox(height: 2),
+                                          Text('Қате URL', style: TextStyle(fontSize: 8, color: AppColors.error)),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return const Center(
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_photo_alternate_outlined,
+                                        size: 26,
+                                        color: isDark ? Colors.white38 : Colors.black38,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Сурет жоқ',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          color: isDark ? Colors.white38 : Colors.black38,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Text input & Clear button
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Кітап мұқабасының суреті',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: _coverUrlController,
+                              style: const TextStyle(fontSize: 13),
+                              decoration: _inputDecoration(
+                                label: 'Сурет URL сілтемесі',
+                                hint: 'https://...',
+                                icon: Icons.link_rounded,
+                                isDark: isDark,
+                              ).copyWith(
+                                suffixIcon: _coverUrlController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        onPressed: () {
+                                          _coverUrlController.clear();
+                                        },
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Дайын сапалы мұқаба үлгілері (таңдау үшін басыңыз):',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _presetCovers.map((preset) {
+                        final isSelected = _coverUrlController.text.trim() == preset['url'];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(preset['name']!),
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                            ),
+                            selected: isSelected,
+                            selectedColor: AppColors.primary,
+                            backgroundColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(
+                                color: isSelected ? AppColors.primary : Colors.transparent,
+                              ),
+                            ),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _coverUrlController.text = preset['url']!;
+                                } else {
+                                  _coverUrlController.clear();
+                                }
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 24),

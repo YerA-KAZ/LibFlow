@@ -10,11 +10,13 @@ import 'ereader_screen.dart';
 class BookDetailScreen extends StatefulWidget {
   final Book book;
   final Function(Book updatedBook) onBookUpdated;
+  final Function(String bookId)? onBookDeleted;
 
   const BookDetailScreen({
     super.key,
     required this.book,
     required this.onBookUpdated,
+    this.onBookDeleted,
   });
 
   @override
@@ -29,6 +31,53 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   void initState() {
     super.initState();
     _book = widget.book;
+  }
+
+  void _confirmDeleteBook() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 28),
+            SizedBox(width: 8),
+            Text('Кітапты өшіру', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          '«${_book.title}» кітабын қордан біржола өшіргіңіз келе ме? Бұл әрекетті қайтару мүмкін емес.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Бас тарту'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx); // Close dialog
+              if (widget.onBookDeleted != null) {
+                widget.onBookDeleted!(_book.id);
+              }
+              Navigator.pop(context, 'deleted'); // Pop back to catalog
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('«${_book.title}» кітабы қордан сәтті өшірілді!'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            },
+            child: const Text('Өшіру'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _toggleFavorite() {
@@ -197,6 +246,101 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
+  Widget _buildDetailCover() {
+    final coverUrl = _book.coverUrl?.trim();
+    final hasCover = coverUrl != null && coverUrl.isNotEmpty;
+
+    return Container(
+      width: 135,
+      height: 195,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(100),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: hasCover
+            ? Image.network(
+                coverUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => _buildFallbackCover(),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      _buildFallbackCover(),
+                      Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          value: progress.expectedTotalBytes != null
+                              ? progress.cumulativeBytesLoaded /
+                                  progress.expectedTotalBytes!
+                              : null,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              )
+            : _buildFallbackCover(),
+      ),
+    );
+  }
+
+  Widget _buildFallbackCover() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _book.coverGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFD4A373), width: 3.5),
+            ),
+            child: const Icon(
+              Icons.menu_book_rounded,
+              color: Color(0xFFD4A373),
+              size: 24,
+            ),
+          ),
+          Positioned(
+            bottom: 16,
+            left: 8,
+            right: 8,
+            child: Text(
+              _book.title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -263,6 +407,22 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
+                    color: Colors.red.withAlpha(50),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                tooltip: 'Кітапты өшіру',
+                onPressed: _confirmDeleteBook,
+              ),
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
                     color: Colors.white.withAlpha(40),
                     shape: BoxShape.circle,
                   ),
@@ -277,57 +437,40 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               const SizedBox(width: 8),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: AppColors.primary,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 36),
-                      // Figma Floating Book Cover with Gold Circle
-                      Container(
-                        width: 130,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFC06C52),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(90),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFD4A373), width: 3.5),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 18,
-                              child: Text(
-                                _book.title,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primaryDark,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  if (_book.coverUrl != null && _book.coverUrl!.trim().isNotEmpty)
+                    Opacity(
+                      opacity: 0.15,
+                      child: Image.network(
+                        _book.coverUrl!.trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const SizedBox(),
+                      ),
+                    ),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 36),
+                        _buildDetailCover(),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -108,11 +108,11 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Navigation List Items matching Figma 14
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceDark : Colors.white,
+            Material(
+              color: isDark ? AppColors.surfaceDark : Colors.white,
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
+                side: BorderSide(
                   color: isDark ? AppColors.borderDark : AppColors.borderLight,
                 ),
               ),

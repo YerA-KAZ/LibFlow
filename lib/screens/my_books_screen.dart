@@ -164,19 +164,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 50,
-                                height: 68,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: book.coverGradient,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.auto_stories, color: Colors.white, size: 24),
-                                ),
-                              ),
+                              _buildBookCoverThumb(book, defaultIcon: Icons.auto_stories),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
@@ -275,17 +263,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 50,
-                                height: 68,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(colors: book.coverGradient),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.bookmark_added, color: Colors.white, size: 24),
-                                ),
-                              ),
+                              _buildBookCoverThumb(book, defaultIcon: Icons.bookmark_added),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
@@ -362,15 +340,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
                     final book = _favorites[index];
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      leading: Container(
-                        width: 44,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: book.coverGradient),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.auto_stories, color: Colors.white, size: 20),
-                      ),
+                      leading: _buildBookCoverThumb(book, width: 44, height: 60, defaultIcon: Icons.auto_stories),
                       title: Text(book.title, style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(book.author),
                       trailing: IconButton(
@@ -394,6 +364,60 @@ class _MyBooksScreenState extends State<MyBooksScreen>
                   },
                 ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBookCoverThumb(
+    Book book, {
+    double width = 50,
+    double height = 68,
+    IconData defaultIcon = Icons.auto_stories,
+  }) {
+    final coverUrl = book.coverUrl?.trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: book.coverGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: (coverUrl != null && coverUrl.isNotEmpty)
+            ? Image.network(
+                coverUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Center(
+                  child: Icon(defaultIcon,
+                      color: Colors.white70, size: width * 0.45),
+                ),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: progress.expectedTotalBytes != null
+                            ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : Center(
+                child: Icon(defaultIcon,
+                    color: Colors.white70, size: width * 0.45),
+              ),
       ),
     );
   }

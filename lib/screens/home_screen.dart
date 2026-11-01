@@ -22,10 +22,12 @@ class HomeScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final readingBook = books.firstWhere(
-      (b) => b.isBorrowed || b.title.contains('Абай'),
-      orElse: () => books.first,
-    );
+    final readingBook = books.isNotEmpty
+        ? books.firstWhere(
+            (b) => b.isBorrowed || b.title.contains('Абай'),
+            orElse: () => books.first,
+          )
+        : null;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
@@ -180,26 +182,57 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFD4A373), width: 3),
-                            ),
-                          ),
-                          const Positioned(
-                            bottom: 8,
-                            child: Text(
-                              'Абай\nжолы',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: (books.isNotEmpty &&
+                                books.first.coverUrl != null &&
+                                books.first.coverUrl!.trim().isNotEmpty)
+                            ? Image.network(
+                                books.first.coverUrl!.trim(),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: const Color(0xFFD4A373), width: 3),
+                                      ),
+                                    ),
+                                    const Positioned(
+                                      bottom: 8,
+                                      child: Text(
+                                        'Абай\nжолы',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFFD4A373), width: 3),
+                                    ),
+                                  ),
+                                  const Positioned(
+                                    bottom: 8,
+                                    child: Text(
+                                      'Абай\nжолы',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
                   ),
@@ -238,92 +271,94 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Reading Progress Card
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BookDetailScreen(
-                      book: readingBook,
-                      onBookUpdated: onBookUpdated,
+            if (readingBook != null)
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookDetailScreen(
+                        book: readingBook,
+                        onBookUpdated: onBookUpdated,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceDark : Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isDark ? AppColors.borderDark : AppColors.borderLight,
                     ),
                   ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceDark : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // Book mini cover
-                    Container(
-                      width: 52,
-                      height: 68,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
+                  child: Row(
+                    children: [
+                      // Book mini cover
+                      ClipRRect(
                         borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 52,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: readingBook.coverGradient,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: (readingBook.coverUrl != null &&
+                                  readingBook.coverUrl!.trim().isNotEmpty)
+                              ? Image.network(
+                                  readingBook.coverUrl!.trim(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Center(
+                                    child: Icon(Icons.auto_stories,
+                                        color: Colors.white70, size: 22),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(Icons.auto_stories,
+                                      color: Colors.white70, size: 22),
+                                ),
+                        ),
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFD4A373), width: 2),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              readingBook.title,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                             ),
-                          ),
-                          const Positioned(
-                            bottom: 6,
-                            child: Text(
-                              'Абай жолы',
-                              style: TextStyle(color: Colors.white, fontSize: 6, fontWeight: FontWeight.bold),
+                            const SizedBox(height: 4),
+                            Text(
+                              '45 / 190 бет • 24%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: 0.24,
+                                minHeight: 5,
+                                backgroundColor: isDark ? Colors.white12 : const Color(0xFFE5EDE8),
+                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            readingBook.title,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '45 / 190 бет • 24%',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: 0.24,
-                              minHeight: 5,
-                              backgroundColor: isDark ? Colors.white12 : const Color(0xFFE5EDE8),
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 28),
 
             // Section: Сізге ұсынылады (Recommended for you)

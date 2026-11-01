@@ -4,7 +4,9 @@ class Book {
   final String id;
   final String title;
   final String author;
+  final String? authorId;
   final String category;
+  final String? categoryId;
   final double rating;
   final int reviewCount;
   final int pages;
@@ -34,7 +36,9 @@ class Book {
     required this.id,
     required this.title,
     required this.author,
+    this.authorId,
     required this.category,
+    this.categoryId,
     required this.rating,
     required this.reviewCount,
     required this.pages,
@@ -62,13 +66,31 @@ class Book {
   });
 
   Book copyWith({
+    String? title,
+    String? author,
+    String? authorId,
+    String? category,
+    String? categoryId,
+    double? rating,
+    int? reviewCount,
+    int? pages,
+    int? publishYear,
+    String? isbn,
+    String? description,
+    List<Color>? coverGradient,
     bool? isFavorite,
     bool? isReserved,
     DateTime? reservationTime,
     String? reservationCode,
     bool? isBorrowed,
     DateTime? dueDate,
+    bool? isAvailable,
     int? availableCopies,
+    int? totalCopies,
+    bool? hasEBook,
+    bool? hasAudio,
+    String? audioDuration,
+    String? readingContent,
     String? coverUrl,
     String? source,
     String? previewUrl,
@@ -76,33 +98,121 @@ class Book {
   }) {
     return Book(
       id: id,
-      title: title,
-      author: author,
-      category: category,
-      rating: rating,
-      reviewCount: reviewCount,
-      pages: pages,
-      publishYear: publishYear,
-      isbn: isbn,
-      description: description,
-      coverGradient: coverGradient,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      authorId: authorId ?? this.authorId,
+      category: category ?? this.category,
+      categoryId: categoryId ?? this.categoryId,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      pages: pages ?? this.pages,
+      publishYear: publishYear ?? this.publishYear,
+      isbn: isbn ?? this.isbn,
+      description: description ?? this.description,
+      coverGradient: coverGradient ?? this.coverGradient,
       coverUrl: coverUrl ?? this.coverUrl,
       source: source ?? this.source,
       previewUrl: previewUrl ?? this.previewUrl,
       infoUrl: infoUrl ?? this.infoUrl,
-      isAvailable: isAvailable,
+      isAvailable: isAvailable ?? this.isAvailable,
       availableCopies: availableCopies ?? this.availableCopies,
-      totalCopies: totalCopies,
-      hasEBook: hasEBook,
-      hasAudio: hasAudio,
-      audioDuration: audioDuration,
-      readingContent: readingContent,
+      totalCopies: totalCopies ?? this.totalCopies,
+      hasEBook: hasEBook ?? this.hasEBook,
+      hasAudio: hasAudio ?? this.hasAudio,
+      audioDuration: audioDuration ?? this.audioDuration,
+      readingContent: readingContent ?? this.readingContent,
       isFavorite: isFavorite ?? this.isFavorite,
       isReserved: isReserved ?? this.isReserved,
       reservationTime: reservationTime ?? this.reservationTime,
       reservationCode: reservationCode ?? this.reservationCode,
       isBorrowed: isBorrowed ?? this.isBorrowed,
       dueDate: dueDate ?? this.dueDate,
+    );
+  }
+
+  // Map representation for Local Database (SQLite / Local Storage)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'author': author,
+      'authorId': authorId,
+      'category': category,
+      'categoryId': categoryId,
+      'rating': rating,
+      'reviewCount': reviewCount,
+      'pages': pages,
+      'publishYear': publishYear,
+      'isbn': isbn,
+      'description': description,
+      'coverUrl': coverUrl,
+      'source': source,
+      'previewUrl': previewUrl,
+      'infoUrl': infoUrl,
+      'isAvailable': isAvailable ? 1 : 0,
+      'availableCopies': availableCopies,
+      'totalCopies': totalCopies,
+      'hasEBook': hasEBook ? 1 : 0,
+      'hasAudio': hasAudio ? 1 : 0,
+      'audioDuration': audioDuration,
+      'readingContent': readingContent,
+      'isFavorite': isFavorite ? 1 : 0,
+      'isReserved': isReserved ? 1 : 0,
+      'reservationTime': reservationTime?.toIso8601String(),
+      'reservationCode': reservationCode,
+      'isBorrowed': isBorrowed ? 1 : 0,
+      'dueDate': dueDate?.toIso8601String(),
+    };
+  }
+
+  // Factory constructor from Map / Local Database
+  factory Book.fromMap(Map<String, dynamic> map) {
+    // Generate harmonious gradient based on book id
+    final gradients = [
+      [const Color(0xFF1E392A), const Color(0xFF2D5A42)],
+      [const Color(0xFF1E3347), const Color(0xFF2C4A63)],
+      [const Color(0xFF8D4B38), const Color(0xFFA65B45)],
+      [const Color(0xFF2E384D), const Color(0xFF4A5568)],
+      [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
+      [const Color(0xFF0F766E), const Color(0xFF14B8A6)],
+    ];
+    final colorPair = gradients[(map['id']?.toString() ?? '1').hashCode.abs() % gradients.length];
+
+    return Book(
+      id: map['id']?.toString() ?? UniqueKey().toString(),
+      title: map['title'] ?? 'Атаусыз кітап',
+      author: map['author'] ?? 'Белгісіз автор',
+      authorId: map['authorId']?.toString(),
+      category: map['category'] ?? 'Жалпы әдебиет',
+      categoryId: map['categoryId']?.toString(),
+      rating: (map['rating'] as num?)?.toDouble() ?? 4.5,
+      reviewCount: (map['reviewCount'] as num?)?.toInt() ?? 10,
+      pages: (map['pages'] as num?)?.toInt() ?? 250,
+      publishYear: (map['publishYear'] as num?)?.toInt() ?? 2022,
+      isbn: map['isbn'] ?? 'ISBN-жоқ',
+      description: map['description'] ?? '',
+      coverGradient: colorPair,
+      coverUrl: map['coverUrl'],
+      source: map['source'] ?? 'LibFlow',
+      previewUrl: map['previewUrl'],
+      infoUrl: map['infoUrl'],
+      isAvailable: (map['isAvailable'] == 1 || map['isAvailable'] == true),
+      availableCopies: (map['availableCopies'] as num?)?.toInt() ?? 1,
+      totalCopies: (map['totalCopies'] as num?)?.toInt() ?? 1,
+      hasEBook: (map['hasEBook'] == 1 || map['hasEBook'] == true),
+      hasAudio: (map['hasAudio'] == 1 || map['hasAudio'] == true),
+      audioDuration: map['audioDuration'] ?? '',
+      readingContent: map['readingContent'] ?? '',
+      isFavorite: (map['isFavorite'] == 1 || map['isFavorite'] == true),
+      isReserved: (map['isReserved'] == 1 || map['isReserved'] == true),
+      reservationTime: map['reservationTime'] != null
+          ? DateTime.tryParse(map['reservationTime'])
+          : null,
+      reservationCode: map['reservationCode'],
+      isBorrowed: (map['isBorrowed'] == 1 || map['isBorrowed'] == true),
+      dueDate: map['dueDate'] != null
+          ? DateTime.tryParse(map['dueDate'])
+          : null,
     );
   }
 
@@ -298,6 +408,7 @@ $description
 
 class BookReview {
   final String id;
+  final String bookId;
   final String userName;
   final double rating;
   final String date;
@@ -305,11 +416,232 @@ class BookReview {
 
   BookReview({
     required this.id,
+    this.bookId = '',
     required this.userName,
     required this.rating,
     required this.date,
     required this.comment,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'bookId': bookId,
+      'userName': userName,
+      'rating': rating,
+      'date': date,
+      'comment': comment,
+    };
+  }
+
+  factory BookReview.fromMap(Map<String, dynamic> map) {
+    return BookReview(
+      id: map['id']?.toString() ?? '',
+      bookId: map['bookId']?.toString() ?? '',
+      userName: map['userName'] ?? 'Белгісіз оқырман',
+      rating: (map['rating'] as num?)?.toDouble() ?? 5.0,
+      date: map['date'] ?? 'Бүгін',
+      comment: map['comment'] ?? '',
+    );
+  }
+}
+
+/// 1. Author Entity / Model
+class Author {
+  final String id;
+  final String fullName;
+  final String biography;
+  final int birthYear;
+  final String country;
+  final String? photoUrl;
+  final int booksCount;
+
+  Author({
+    required this.id,
+    required this.fullName,
+    required this.biography,
+    required this.birthYear,
+    required this.country,
+    this.photoUrl,
+    this.booksCount = 0,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'fullName': fullName,
+      'biography': biography,
+      'birthYear': birthYear,
+      'country': country,
+      'photoUrl': photoUrl,
+      'booksCount': booksCount,
+    };
+  }
+
+  factory Author.fromMap(Map<String, dynamic> map) {
+    return Author(
+      id: map['id']?.toString() ?? '',
+      fullName: map['fullName'] ?? '',
+      biography: map['biography'] ?? '',
+      birthYear: (map['birthYear'] as num?)?.toInt() ?? 1900,
+      country: map['country'] ?? 'Қазақстан',
+      photoUrl: map['photoUrl'],
+      booksCount: (map['booksCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// 2. BookCategory Entity / Model
+class BookCategory {
+  final String id;
+  final String name;
+  final String description;
+  final String iconName;
+  final int bookCount;
+
+  BookCategory({
+    required this.id,
+    required this.name,
+    required this.description,
+    this.iconName = 'book',
+    this.bookCount = 0,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'iconName': iconName,
+      'bookCount': bookCount,
+    };
+  }
+
+  factory BookCategory.fromMap(Map<String, dynamic> map) {
+    return BookCategory(
+      id: map['id']?.toString() ?? '',
+      name: map['name'] ?? '',
+      description: map['description'] ?? '',
+      iconName: map['iconName'] ?? 'book',
+      bookCount: (map['bookCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+typedef Category = BookCategory;
+
+/// 3. Reader / User Entity / Model
+class Reader {
+  final String id;
+  final String ticketNumber; // Оқырман билеті №
+  final String fullName;
+  final String email;
+  final String phone;
+  final String? avatarUrl;
+  final DateTime registeredAt;
+  final bool isActive;
+
+  Reader({
+    required this.id,
+    required this.ticketNumber,
+    required this.fullName,
+    required this.email,
+    required this.phone,
+    this.avatarUrl,
+    required this.registeredAt,
+    this.isActive = true,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'ticketNumber': ticketNumber,
+      'fullName': fullName,
+      'email': email,
+      'phone': phone,
+      'avatarUrl': avatarUrl,
+      'registeredAt': registeredAt.toIso8601String(),
+      'isActive': isActive ? 1 : 0,
+    };
+  }
+
+  factory Reader.fromMap(Map<String, dynamic> map) {
+    return Reader(
+      id: map['id']?.toString() ?? '',
+      ticketNumber: map['ticketNumber'] ?? 'LIB-0000',
+      fullName: map['fullName'] ?? '',
+      email: map['email'] ?? '',
+      phone: map['phone'] ?? '',
+      avatarUrl: map['avatarUrl'],
+      registeredAt: map['registeredAt'] != null
+          ? DateTime.tryParse(map['registeredAt']) ?? DateTime.now()
+          : DateTime.now(),
+      isActive: map['isActive'] == 1 || map['isActive'] == true,
+    );
+  }
+}
+
+/// 4. Loan / BorrowRecord Entity / Model (M-to-N transaction between Reader and Book)
+class Loan {
+  final String id;
+  final String bookId;
+  final String readerId;
+  final String bookTitle;
+  final String readerName;
+  final DateTime borrowDate;
+  final DateTime dueDate;
+  final DateTime? returnDate;
+  final String status; // 'active', 'reserved', 'returned', 'overdue'
+  final String qrCode;
+
+  Loan({
+    required this.id,
+    required this.bookId,
+    required this.readerId,
+    required this.bookTitle,
+    required this.readerName,
+    required this.borrowDate,
+    required this.dueDate,
+    this.returnDate,
+    this.status = 'active',
+    required this.qrCode,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'bookId': bookId,
+      'readerId': readerId,
+      'bookTitle': bookTitle,
+      'readerName': readerName,
+      'borrowDate': borrowDate.toIso8601String(),
+      'dueDate': dueDate.toIso8601String(),
+      'returnDate': returnDate?.toIso8601String(),
+      'status': status,
+      'qrCode': qrCode,
+    };
+  }
+
+  factory Loan.fromMap(Map<String, dynamic> map) {
+    return Loan(
+      id: map['id']?.toString() ?? '',
+      bookId: map['bookId']?.toString() ?? '',
+      readerId: map['readerId']?.toString() ?? '',
+      bookTitle: map['bookTitle'] ?? '',
+      readerName: map['readerName'] ?? '',
+      borrowDate: map['borrowDate'] != null
+          ? DateTime.tryParse(map['borrowDate']) ?? DateTime.now()
+          : DateTime.now(),
+      dueDate: map['dueDate'] != null
+          ? DateTime.tryParse(map['dueDate']) ?? DateTime.now().add(const Duration(days: 14))
+          : DateTime.now().add(const Duration(days: 14)),
+      returnDate: map['returnDate'] != null
+          ? DateTime.tryParse(map['returnDate'])
+          : null,
+      status: map['status'] ?? 'active',
+      qrCode: map['qrCode'] ?? '',
+    );
+  }
 }
 
 class AppNotification {

@@ -17,70 +17,57 @@ class BookCard extends StatelessWidget {
   });
 
   Widget _buildCoverImage({required double iconSize}) {
-    if (book.coverUrl != null && book.coverUrl!.isNotEmpty) {
+    final rawUrl = book.coverUrl?.trim();
+    if (rawUrl != null && rawUrl.isNotEmpty) {
+      Widget imageWidget;
+      if (rawUrl.startsWith('assets/')) {
+        imageWidget = Image.asset(
+          rawUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(iconSize),
+        );
+      } else {
+        imageWidget = Image.network(
+          rawUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(iconSize),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: Colors.white70,
+                ),
+              ),
+            );
+          },
+        );
+      }
+
       return Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: book.coverGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-          Image.network(
-            book.coverUrl!,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (context, error, stackTrace) {
-              return Center(
-                child: Icon(
-                  Icons.auto_stories_rounded,
-                  size: iconSize,
-                  color: Colors.white.withAlpha(200),
-                ),
-              );
-            },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: Colors.white70,
-                  ),
-                ),
-              );
-            },
-          ),
-          // Subtle gradient overlay at top/bottom for text contrast
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withAlpha(120),
-                  Colors.transparent,
-                  Colors.black.withAlpha(140),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0.0, 0.4, 1.0],
-              ),
-            ),
-          ),
+          _buildPlaceholder(iconSize),
+          imageWidget,
         ],
       );
     }
 
+    return _buildPlaceholder(iconSize);
+  }
+
+  Widget _buildPlaceholder(double iconSize) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -93,7 +80,7 @@ class BookCard extends StatelessWidget {
         child: Icon(
           Icons.auto_stories_rounded,
           size: iconSize,
-          color: Colors.white.withAlpha(200),
+          color: Colors.white.withAlpha(220),
         ),
       ),
     );

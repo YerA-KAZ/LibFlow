@@ -7,9 +7,13 @@ import 'screens/my_books_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/dummy_books.dart';
+import 'services/library_database_service.dart';
 import 'utils/constants.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Практикалық жұмыс №4: Деректер қорын қосымша басталар алдында инициализациялау
+  await LibraryDatabaseService().initializeDatabase();
   runApp(const LibFlowApp());
 }
 
@@ -96,15 +100,22 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   bool _showSplash = true;
   bool _isAuthenticated = true; // Set to true by default for immediate prototype viewing
   int _currentIndex = 0;
-  late List<Book> _books;
+  List<Book> _books = DummyDataService.getInitialBooks();
 
   @override
   void initState() {
     super.initState();
-    _books = DummyDataService.getInitialBooks();
+    _loadBooksFromDatabase();
   }
 
-  void _handleBookUpdate(Book updatedBook) {
+  void _loadBooksFromDatabase() {
+    setState(() {
+      _books = LibraryDatabaseService().getAllBooks();
+    });
+  }
+
+  void _handleBookUpdate(Book updatedBook) async {
+    await LibraryDatabaseService().updateBook(updatedBook);
     setState(() {
       final index = _books.indexWhere((b) => b.id == updatedBook.id);
       if (index != -1) {
@@ -113,9 +124,17 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     });
   }
 
-  void _handleBookAdd(Book newBook) {
+  void _handleBookAdd(Book newBook) async {
+    await LibraryDatabaseService().insertBook(newBook);
     setState(() {
       _books.insert(0, newBook);
+    });
+  }
+
+  void _handleBookDelete(String bookId) async {
+    await LibraryDatabaseService().deleteBook(bookId);
+    setState(() {
+      _books.removeWhere((b) => b.id == bookId);
     });
   }
 
@@ -152,6 +171,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         books: _books,
         onBookUpdated: _handleBookUpdate,
         onBookAdded: _handleBookAdd,
+        onBookDeleted: _handleBookDelete,
       ),
       MyBooksScreen(
         books: _books,
