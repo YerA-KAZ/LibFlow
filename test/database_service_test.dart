@@ -1,9 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libflow/models/book_model.dart';
 import 'package:libflow/services/library_database_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final directory = Directory.systemTemp.createTempSync(
+    'libflow_database_test_',
+  );
+  LibraryDatabaseService.storageDirectoryOverride = directory.path;
+  tearDownAll(() async {
+    LibraryDatabaseService.storageDirectoryOverride = null;
+    await directory.delete(recursive: true);
+  });
 
   group('Практикалық жұмыс №4: Entity/Model және DatabaseService тесттері', () {
     late LibraryDatabaseService dbService;
@@ -107,29 +117,40 @@ void main() {
       expect(fetched!.title, 'Қара сөздер');
     });
 
-    test('3. CRUD: Read - Кітаптар оқылады және іздеу жүйесі жұмыс істейді', () {
-      final books = dbService.getAllBooks();
-      expect(books.isNotEmpty, isTrue);
+    test(
+      '3. CRUD: Read - Кітаптар оқылады және іздеу жүйесі жұмыс істейді',
+      () {
+        final books = dbService.getAllBooks();
+        expect(books.isNotEmpty, isTrue);
 
-      // Search by title or author
-      final searchResults = dbService.searchBooks('Абай');
-      expect(searchResults.any((b) => b.title.contains('Абай') || b.author.contains('Абай')), isTrue);
-    });
+        // Search by title or author
+        final searchResults = dbService.searchBooks('Абай');
+        expect(
+          searchResults.any(
+            (b) => b.title.contains('Абай') || b.author.contains('Абай'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('4. CRUD: Update - Бар кітаптың мәліметтері мен Favorites жаңартылады', () async {
-      final existing = dbService.getAllBooks().first;
-      final updated = existing.copyWith(
-        title: '${existing.title} (Жаңартылған басылым)',
-        isFavorite: true,
-      );
+    test(
+      '4. CRUD: Update - Бар кітаптың мәліметтері мен Favorites жаңартылады',
+      () async {
+        final existing = dbService.getAllBooks().first;
+        final updated = existing.copyWith(
+          title: '${existing.title} (Жаңартылған басылым)',
+          isFavorite: true,
+        );
 
-      final updateRes = await dbService.updateBook(updated);
-      expect(updateRes, isTrue);
+        final updateRes = await dbService.updateBook(updated);
+        expect(updateRes, isTrue);
 
-      final fetched = dbService.getBookById(existing.id);
-      expect(fetched!.title.contains('Жаңартылған басылым'), isTrue);
-      expect(fetched.isFavorite, isTrue);
-    });
+        final fetched = dbService.getBookById(existing.id);
+        expect(fetched!.title.contains('Жаңартылған басылым'), isTrue);
+        expect(fetched.isFavorite, isTrue);
+      },
+    );
 
     test('5. CRUD: Delete - Кітап сәтті өшіріледі', () async {
       const deleteId = 'test_book_999';
@@ -140,38 +161,58 @@ void main() {
       expect(fetched, isNull);
     });
 
-    test('6. Сұрыптау: Кемінде 3 түрлі параметр бойынша сұрыптау тексерісі', () {
-      final list = dbService.getAllBooks();
-      expect(list.length, greaterThanOrEqualTo(2));
+    test(
+      '6. Сұрыптау: Кемінде 3 түрлі параметр бойынша сұрыптау тексерісі',
+      () {
+        final list = dbService.getAllBooks();
+        expect(list.length, greaterThanOrEqualTo(2));
 
-      // 1) Атауы бойынша (titleAsc)
-      final sortedByTitle = dbService.sortBooks(list, BookSortOption.titleAsc);
-      for (int i = 0; i < sortedByTitle.length - 1; i++) {
-        expect(
-          sortedByTitle[i].title.toLowerCase().compareTo(sortedByTitle[i + 1].title.toLowerCase()) <= 0,
-          isTrue,
+        // 1) Атауы бойынша (titleAsc)
+        final sortedByTitle = dbService.sortBooks(
+          list,
+          BookSortOption.titleAsc,
         );
-      }
+        for (int i = 0; i < sortedByTitle.length - 1; i++) {
+          expect(
+            sortedByTitle[i].title.toLowerCase().compareTo(
+                  sortedByTitle[i + 1].title.toLowerCase(),
+                ) <=
+                0,
+            isTrue,
+          );
+        }
 
-      // 2) Рейтинг бойынша (ratingDesc)
-      final sortedByRating = dbService.sortBooks(list, BookSortOption.ratingDesc);
-      for (int i = 0; i < sortedByRating.length - 1; i++) {
-        expect(sortedByRating[i].rating >= sortedByRating[i + 1].rating, isTrue);
-      }
+        // 2) Рейтинг бойынша (ratingDesc)
+        final sortedByRating = dbService.sortBooks(
+          list,
+          BookSortOption.ratingDesc,
+        );
+        for (int i = 0; i < sortedByRating.length - 1; i++) {
+          expect(
+            sortedByRating[i].rating >= sortedByRating[i + 1].rating,
+            isTrue,
+          );
+        }
 
-      // 3) Шыққан жылы бойынша (yearDesc)
-      final sortedByYear = dbService.sortBooks(list, BookSortOption.yearDesc);
-      for (int i = 0; i < sortedByYear.length - 1; i++) {
-        expect(sortedByYear[i].publishYear >= sortedByYear[i + 1].publishYear, isTrue);
-      }
-    });
+        // 3) Шыққан жылы бойынша (yearDesc)
+        final sortedByYear = dbService.sortBooks(list, BookSortOption.yearDesc);
+        for (int i = 0; i < sortedByYear.length - 1; i++) {
+          expect(
+            sortedByYear[i].publishYear >= sortedByYear[i + 1].publishYear,
+            isTrue,
+          );
+        }
+      },
+    );
 
-    test('7. Сүзгілеу: Категория және қолжетімділік бойынша сүзгілеу тексерісі', () {
-      final filtered = dbService.filterBooks(onlyAvailable: true);
-      for (var b in filtered) {
-        expect(b.isAvailable, isTrue);
-      }
-    });
+    test(
+      '7. Сүзгілеу: Категория және қолжетімділік бойынша сүзгілеу тексерісі',
+      () {
+        final filtered = dbService.filterBooks(onlyAvailable: true);
+        for (var b in filtered) {
+          expect(b.isAvailable, isTrue);
+        }
+      },
+    );
   });
 }
-

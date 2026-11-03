@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
 import '../services/dummy_books.dart';
 import '../utils/constants.dart';
@@ -9,8 +10,8 @@ import 'ereader_screen.dart';
 
 class BookDetailScreen extends StatefulWidget {
   final Book book;
-  final Function(Book updatedBook) onBookUpdated;
-  final Function(String bookId)? onBookDeleted;
+  final Future<bool> Function(Book updatedBook) onBookUpdated;
+  final Future<bool> Function(String bookId)? onBookDeleted;
 
   const BookDetailScreen({
     super.key,
@@ -25,6 +26,17 @@ class BookDetailScreen extends StatefulWidget {
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
   late Book _book;
+  bool _isMutating = false;
+
+  void _showMutationError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Серверге сақтау орындалмады. Қайта көріңіз.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
   final List<BookReview> _reviews = DummyDataService.getSampleReviews();
 
   @override
@@ -40,9 +52,16 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 28),
+            Icon(
+              Icons.delete_forever_rounded,
+              color: AppColors.error,
+              size: 28,
+            ),
             SizedBox(width: 8),
-            Text('Кітапты өшіру', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Кітапты өшіру',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
@@ -58,20 +77,25 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            onPressed: () {
-              Navigator.pop(ctx); // Close dialog
-              if (widget.onBookDeleted != null) {
-                widget.onBookDeleted!(_book.id);
+            onPressed: () async {
+              if (_isMutating || widget.onBookDeleted == null) return;
+              setState(() => _isMutating = true);
+              final deleted = await widget.onBookDeleted!(_book.id);
+              if (!mounted || !ctx.mounted) return;
+              setState(() => _isMutating = false);
+              Navigator.pop(ctx);
+              if (deleted) {
+                Navigator.pop(context, 'deleted');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Кітап серверден өшірілді.')),
+                );
+              } else {
+                _showMutationError();
               }
-              Navigator.pop(context, 'deleted'); // Pop back to catalog
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('«${_book.title}» кітабы қордан сәтті өшірілді!'),
-                  backgroundColor: AppColors.error,
-                ),
-              );
             },
             child: const Text('Өшіру'),
           ),
@@ -80,14 +104,21 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  void _toggleFavorite() {
+  Future<void> _toggleFavorite() async {
+    if (_isMutating) return;
+    setState(() => _isMutating = true);
+    final updated = _book.copyWith(isFavorite: !_book.isFavorite);
+    final saved = await widget.onBookUpdated(updated);
+    if (!mounted) return;
     setState(() {
-      _book = _book.copyWith(isFavorite: !_book.isFavorite);
+      _isMutating = false;
+      if (saved) _book = updated;
     });
-    widget.onBookUpdated(_book);
+    if (!saved) _showMutationError();
   }
 
-  void _reserveBook() {
+  Future<void> _reserveBook() async {
+    if (_isMutating) return;
     if (!_book.isAvailable || _book.availableCopies <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -97,18 +128,24 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       );
       return;
     }
-
-    final code = 'LIBFLOW-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
+    final code = 'LIBFLOW-${DateTime.now().millisecondsSinceEpoch}';
+    final updated = _book.copyWith(
+      isReserved: true,
+      reservationTime: DateTime.now(),
+      reservationCode: code,
+      availableCopies: _book.availableCopies - 1,
+    );
+    setState(() => _isMutating = true);
+    final saved = await widget.onBookUpdated(updated);
+    if (!mounted) return;
     setState(() {
-      _book = _book.copyWith(
-        isReserved: true,
-        reservationTime: DateTime.now(),
-        reservationCode: code,
-        availableCopies: _book.availableCopies - 1,
-      );
+      _isMutating = false;
+      if (saved) _book = updated;
     });
-    widget.onBookUpdated(_book);
+    if (!saved) {
+      _showMutationError();
+      return;
+    }
 
     // Show Reservation Modal with QR Code
     showDialog(
@@ -153,7 +190,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Жабу', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Жабу',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -168,13 +208,18 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text('Пікір мен рейтинг қосу'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Бағалау (1-ден 5-ке дейін):', style: TextStyle(fontSize: 13)),
+              const Text(
+                'Бағалау (1-ден 5-ке дейін):',
+                style: TextStyle(fontSize: 13),
+              ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -202,7 +247,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 decoration: InputDecoration(
                   hintText: 'Осы кітап туралы пікіріңізді жазыңыз...',
                   hintStyle: const TextStyle(fontSize: 13),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -216,7 +263,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 if (textController.text.trim().isNotEmpty) {
@@ -234,7 +283,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   });
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Пікіріңіз сәтті жарияланды!')),
+                    const SnackBar(
+                      content: Text('Пікіріңіз сәтті жарияланды!'),
+                    ),
                   );
                 }
               },
@@ -269,7 +320,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             ? Image.network(
                 coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _buildFallbackCover(),
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildFallbackCover(),
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;
                   return Stack(
@@ -281,7 +333,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                           strokeWidth: 2.5,
                           value: progress.expectedTotalBytes != null
                               ? progress.cumulativeBytesLoaded /
-                                  progress.expectedTotalBytes!
+                                    progress.expectedTotalBytes!
                               : null,
                           color: Colors.white,
                         ),
@@ -347,7 +399,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       body: CustomScrollView(
         slivers: [
           // Collapsible App Bar with Forest Green Cover Container matching Figma 08
@@ -362,7 +416,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   color: Colors.white.withAlpha(40),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               onPressed: () => Navigator.pop(context),
             ),
@@ -387,16 +445,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     MaterialPageRoute(
                       builder: (context) => BookFormScreen(
                         book: _book,
-                        onSave: (editedBook) {
-                          setState(() {
-                            _book = editedBook;
-                          });
-                          widget.onBookUpdated(editedBook);
-                        },
+                        onSave: widget.onBookUpdated,
                       ),
                     ),
                   );
-                  if (updated != null) {
+                  if (mounted && updated != null) {
                     setState(() {
                       _book = updated;
                     });
@@ -443,16 +496,14 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary,
-                          AppColors.primaryDark,
-                        ],
+                        colors: [AppColors.primary, AppColors.primaryDark],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
                     ),
                   ),
-                  if (_book.coverUrl != null && _book.coverUrl!.trim().isNotEmpty)
+                  if (_book.coverUrl != null &&
+                      _book.coverUrl!.trim().isNotEmpty)
                     Opacity(
                       opacity: 0.15,
                       child: Image.network(
@@ -504,11 +555,18 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   // Figma 08: Rating, Pages, Language row
                   Row(
                     children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFD4A373), size: 18),
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Color(0xFFD4A373),
+                        size: 18,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${_book.rating}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       const Text('•', style: TextStyle(color: Colors.grey)),
@@ -517,7 +575,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                         '${_book.pages} бет',
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          color: isDark
+                              ? AppColors.textSecondaryDark
+                              : AppColors.textSecondaryLight,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -527,7 +587,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                         'Қазақша',
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          color: isDark
+                              ? AppColors.textSecondaryDark
+                              : AppColors.textSecondaryLight,
                         ),
                       ),
                     ],
@@ -535,35 +597,50 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   const SizedBox(height: 16),
 
                   // Figma 08 Genre Tags: Классика, Роман
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white10 : const Color(0xFFF0ECE3),
+                          color: isDark
+                              ? Colors.white10
+                              : const Color(0xFFF0ECE3),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           'Классика',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.white70 : AppColors.textPrimaryLight,
+                            color: isDark
+                                ? Colors.white70
+                                : AppColors.textPrimaryLight,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white10 : const Color(0xFFF0ECE3),
+                          color: isDark
+                              ? Colors.white10
+                              : const Color(0xFFF0ECE3),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           'Роман',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.white70 : AppColors.textPrimaryLight,
+                            color: isDark
+                                ? Colors.white70
+                                : AppColors.textPrimaryLight,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -583,7 +660,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                      color: isDark
+                          ? AppColors.textSecondaryDark
+                          : AppColors.textSecondaryLight,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -614,7 +693,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                         children: [
                           Text(
                             'Оқуды бастау',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           SizedBox(width: 8),
                           Icon(Icons.arrow_forward_rounded, size: 18),
@@ -630,20 +712,27 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.accent,
-                          side: const BorderSide(color: AppColors.accent, width: 1.5),
+                          side: const BorderSide(
+                            color: AppColors.accent,
+                            width: 1.5,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         icon: const Icon(Icons.headphones_rounded),
-                        label: const Text('Аудио тыңдау',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'Аудио тыңдау',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         onPressed: () {
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
                             shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(28),
+                              ),
                             ),
                             builder: (_) => AudioPlayerSheet(book: _book),
                           );
@@ -660,7 +749,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       color: isDark ? AppColors.surfaceDark : Colors.grey[100],
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                        color: isDark
+                            ? AppColors.borderDark
+                            : AppColors.borderLight,
                       ),
                     ),
                     child: Column(
@@ -668,16 +759,27 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.storefront_rounded, color: AppColors.primaryLight),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Кітапханадан физикалық алу',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            const Icon(
+                              Icons.storefront_rounded,
+                              color: AppColors.primaryLight,
                             ),
-                            const Spacer(),
-                            if (_book.isReserved)
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Кітапханадан физикалық алу',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            if (_book.isReserved) ...[
+                              const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.warning.withAlpha(30),
                                   borderRadius: BorderRadius.circular(8),
@@ -691,6 +793,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                   ),
                                 ),
                               ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -717,7 +820,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                               _book.isReserved
                                   ? 'Брондау коды сақталды'
                                   : 'Қазір брондау (24 сағат)',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             onPressed: _book.isReserved ? null : _reserveBook,
                           ),
@@ -752,11 +857,15 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
                   // Reviews section
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Оқырмандар пікірлері',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      const Expanded(
+                        child: Text(
+                          'Оқырмандар пікірлері',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       TextButton.icon(
                         icon: const Icon(Icons.edit, size: 16),
@@ -802,27 +911,41 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    review.userName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  Text(
-                    review.date,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.userName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      review.date,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, size: 16, color: AppColors.accent),
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 16,
+                    color: AppColors.accent,
+                  ),
                   const SizedBox(width: 2),
                   Text(
                     review.rating.toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),

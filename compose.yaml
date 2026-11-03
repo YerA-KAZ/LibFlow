@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: libflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-libflow_dev}
+      POSTGRES_DB: libflow
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libflow -d libflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://libflow:${POSTGRES_PASSWORD:-libflow_dev}@db:5432/libflow
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:

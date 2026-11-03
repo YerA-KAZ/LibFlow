@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
 import '../utils/constants.dart';
 
 class BookFormScreen extends StatefulWidget {
   final Book? book; // If provided, edit mode. If null, create mode.
-  final Function(Book) onSave;
+  final Future<bool> Function(Book) onSave;
 
-  const BookFormScreen({
-    super.key,
-    this.book,
-    required this.onSave,
-  });
+  const BookFormScreen({super.key, this.book, required this.onSave});
 
   @override
   State<BookFormScreen> createState() => _BookFormScreenState();
 }
 
 class _BookFormScreenState extends State<BookFormScreen> {
+  bool _isSaving = false;
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _titleController;
@@ -79,9 +77,13 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _authorController = TextEditingController(text: b?.author ?? '');
     _descriptionController = TextEditingController(text: b?.description ?? '');
     _isbnController = TextEditingController(
-      text: b?.isbn ?? '978-601-${DateTime.now().millisecondsSinceEpoch.toString().substring(6, 12)}',
+      text:
+          b?.isbn ??
+          '978-601-${DateTime.now().millisecondsSinceEpoch.toString().substring(6, 12)}',
     );
-    _pagesController = TextEditingController(text: (b?.pages ?? 250).toString());
+    _pagesController = TextEditingController(
+      text: (b?.pages ?? 250).toString(),
+    );
     _publishYearController = TextEditingController(
       text: (b?.publishYear ?? DateTime.now().year).toString(),
     );
@@ -90,10 +92,11 @@ class _BookFormScreenState extends State<BookFormScreen> {
     );
     _coverUrlController = TextEditingController(text: b?.coverUrl ?? '');
     _coverUrlController.addListener(_onCoverUrlChanged);
-    _audioDurationController = TextEditingController(text: b?.audioDuration ?? '1 сағ 45 мин');
+    _audioDurationController = TextEditingController(
+      text: b?.audioDuration ?? '1 сағ 45 мин',
+    );
     _readingContentController = TextEditingController(
-      text: b?.readingContent ??
-          'Бұл кітаптың толық электронды мәтіні осы жерге жүктеледі немесе оқырмандарға ұсынылады.',
+      text: b?.readingContent ?? 'Бұл кітаптың толық электронды мәтіні осы жерге жүктеледі немесе оқырмандарға ұсынылады.',
     );
 
     _selectedCategory = (b != null && _categories.contains(b.category))
@@ -124,7 +127,8 @@ class _BookFormScreenState extends State<BookFormScreen> {
     super.dispose();
   }
 
-  void _saveBook() {
+  Future<void> _saveBook() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -136,7 +140,8 @@ class _BookFormScreenState extends State<BookFormScreen> {
     }
 
     final pages = int.tryParse(_pagesController.text.trim()) ?? 200;
-    final year = int.tryParse(_publishYearController.text.trim()) ?? DateTime.now().year;
+    final year =
+        int.tryParse(_publishYearController.text.trim()) ?? DateTime.now().year;
     final totalCopies = int.tryParse(_totalCopiesController.text.trim()) ?? 3;
     final isEdit = widget.book != null;
 
@@ -151,7 +156,8 @@ class _BookFormScreenState extends State<BookFormScreen> {
       publishYear: year,
       isbn: _isbnController.text.trim(),
       description: _descriptionController.text.trim(),
-      coverGradient: widget.book?.coverGradient ??
+      coverGradient:
+          widget.book?.coverGradient ??
           const [AppColors.primary, AppColors.primaryLight],
       coverUrl: _coverUrlController.text.trim().isNotEmpty
           ? _coverUrlController.text.trim()
@@ -159,7 +165,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
       source: widget.book?.source ?? 'LibFlow',
       isAvailable: _isAvailable && totalCopies > 0,
       availableCopies: widget.book != null
-          ? (widget.book!.availableCopies > totalCopies ? totalCopies : widget.book!.availableCopies)
+          ? (widget.book!.availableCopies > totalCopies
+                ? totalCopies
+                : widget.book!.availableCopies)
           : totalCopies,
       totalCopies: totalCopies,
       hasEBook: _hasEBook,
@@ -174,10 +182,25 @@ class _BookFormScreenState extends State<BookFormScreen> {
       dueDate: widget.book?.dueDate,
     );
 
-    widget.onSave(resultBook);
+    setState(() => _isSaving = true);
+    final saved = await widget.onSave(resultBook);
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Сақтау орындалмады. Сервер байланысын тексеріп, қайта көріңіз.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context, resultBook);
-
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(
           isEdit
@@ -196,7 +219,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
     final isEdit = widget.book != null;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       appBar: AppBar(
         title: Text(
           isEdit ? 'Кітапты өңдеу' : 'Жаңа кітап қосу',
@@ -207,7 +232,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
           IconButton(
             icon: const Icon(Icons.check_rounded, color: AppColors.primary),
             tooltip: 'Сақтау',
-            onPressed: _saveBook,
+            onPressed: _isSaving ? null : _saveBook,
           ),
         ],
       ),
@@ -216,6 +241,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
+            if (_isSaving) const LinearProgressIndicator(),
             // Header card
             Container(
               padding: const EdgeInsets.all(16),
@@ -237,7 +263,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      isEdit ? Icons.edit_note_rounded : Icons.library_add_rounded,
+                      isEdit
+                          ? Icons.edit_note_rounded
+                          : Icons.library_add_rounded,
                       color: AppColors.primary,
                       size: 28,
                     ),
@@ -248,7 +276,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isEdit ? 'Деректерді жаңарту' : 'Каталогқа кітап енгізу',
+                          isEdit
+                              ? 'Деректерді жаңарту'
+                              : 'Каталогқа кітап енгізу',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -259,7 +289,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                           'Кітапхана қорындағы жазбаларды басқару',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                            color: isDark
+                                ? AppColors.textSecondaryDark
+                                : AppColors.textSecondaryLight,
                           ),
                         ),
                       ],
@@ -320,10 +352,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
               ),
               dropdownColor: isDark ? AppColors.surfaceDark : Colors.white,
               items: _categories.map((c) {
-                return DropdownMenuItem<String>(
-                  value: c,
-                  child: Text(c),
-                );
+                return DropdownMenuItem<String>(value: c, child: Text(c));
               }).toList(),
               onChanged: (val) {
                 if (val != null) {
@@ -356,7 +385,10 @@ class _BookFormScreenState extends State<BookFormScreen> {
             const SizedBox(height: 24),
 
             // Section: Баспа және қор ақпараты
-            _buildSectionHeader('Баспа және қор параметрлері', Icons.inventory_2_rounded),
+            _buildSectionHeader(
+              'Баспа және қор параметрлері',
+              Icons.inventory_2_rounded,
+            ),
             const SizedBox(height: 12),
 
             Row(
@@ -373,7 +405,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) return 'Бет саны';
-                      if (int.tryParse(val.trim()) == null) return 'Сан болуы керек';
+                      if (int.tryParse(val.trim()) == null) {
+                        return 'Сан болуы керек';
+                      }
                       return null;
                     },
                   ),
@@ -436,7 +470,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) return 'Дана саны';
                       final count = int.tryParse(val.trim());
-                      if (count == null || count < 0) return 'Дұрыс сан жазыңыз';
+                      if (count == null || count < 0) {
+                        return 'Дұрыс сан жазыңыз';
+                      }
                       return null;
                     },
                   ),
@@ -481,11 +517,22 @@ class _BookFormScreenState extends State<BookFormScreen> {
                                   errorBuilder: (context, error, stackTrace) {
                                     return const Center(
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.broken_image_rounded, size: 24, color: AppColors.error),
+                                          Icon(
+                                            Icons.broken_image_rounded,
+                                            size: 24,
+                                            color: AppColors.error,
+                                          ),
                                           SizedBox(height: 2),
-                                          Text('Қате URL', style: TextStyle(fontSize: 8, color: AppColors.error)),
+                                          Text(
+                                            'Қате URL',
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              color: AppColors.error,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     );
@@ -496,7 +543,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                                       child: SizedBox(
                                         width: 18,
                                         height: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
                                       ),
                                     );
                                   },
@@ -508,14 +557,18 @@ class _BookFormScreenState extends State<BookFormScreen> {
                                       Icon(
                                         Icons.add_photo_alternate_outlined,
                                         size: 26,
-                                        color: isDark ? Colors.white38 : Colors.black38,
+                                        color: isDark
+                                            ? Colors.white38
+                                            : Colors.black38,
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         'Сурет жоқ',
                                         style: TextStyle(
                                           fontSize: 8,
-                                          color: isDark ? Colors.white38 : Colors.black38,
+                                          color: isDark
+                                              ? Colors.white38
+                                              : Colors.black38,
                                         ),
                                       ),
                                     ],
@@ -534,28 +587,35 @@ class _BookFormScreenState extends State<BookFormScreen> {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                color: isDark
+                                    ? AppColors.textPrimaryDark
+                                    : AppColors.textPrimaryLight,
                               ),
                             ),
                             const SizedBox(height: 6),
                             TextFormField(
                               controller: _coverUrlController,
                               style: const TextStyle(fontSize: 13),
-                              decoration: _inputDecoration(
-                                label: 'Сурет URL сілтемесі',
-                                hint: 'https://...',
-                                icon: Icons.link_rounded,
-                                isDark: isDark,
-                              ).copyWith(
-                                suffixIcon: _coverUrlController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 18),
-                                        onPressed: () {
-                                          _coverUrlController.clear();
-                                        },
-                                      )
-                                    : null,
-                              ),
+                              decoration:
+                                  _inputDecoration(
+                                    label: 'Сурет URL сілтемесі',
+                                    hint: 'https://...',
+                                    icon: Icons.link_rounded,
+                                    isDark: isDark,
+                                  ).copyWith(
+                                    suffixIcon:
+                                        _coverUrlController.text.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(
+                                              Icons.clear,
+                                              size: 18,
+                                            ),
+                                            onPressed: () {
+                                              _coverUrlController.clear();
+                                            },
+                                          )
+                                        : null,
+                                  ),
                             ),
                           ],
                         ),
@@ -570,7 +630,9 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                      color: isDark
+                          ? AppColors.textSecondaryDark
+                          : AppColors.textSecondaryLight,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -578,23 +640,32 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: _presetCovers.map((preset) {
-                        final isSelected = _coverUrlController.text.trim() == preset['url'];
+                        final isSelected =
+                            _coverUrlController.text.trim() == preset['url'];
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: ChoiceChip(
                             label: Text(preset['name']!),
                             labelStyle: TextStyle(
                               fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : Colors.black87),
                             ),
                             selected: isSelected,
                             selectedColor: AppColors.primary,
-                            backgroundColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                            backgroundColor: isDark
+                                ? Colors.grey[800]
+                                : Colors.grey[100],
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                               side: BorderSide(
-                                color: isSelected ? AppColors.primary : Colors.transparent,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : Colors.transparent,
                               ),
                             ),
                             onSelected: (selected) {
@@ -676,7 +747,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
 
             // Save Button
             ElevatedButton(
-              onPressed: _saveBook,
+              onPressed: _isSaving ? null : _saveBook,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -689,11 +760,17 @@ class _BookFormScreenState extends State<BookFormScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(isEdit ? Icons.save_rounded : Icons.add_circle_rounded, size: 20),
+                  Icon(
+                    isEdit ? Icons.save_rounded : Icons.add_circle_rounded,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     isEdit ? 'Өзгерістерді сақтау' : 'Кітапты қосу',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),

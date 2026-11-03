@@ -5,7 +5,7 @@ import 'book_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<Book> books;
-  final Function(Book) onBookUpdated;
+  final Future<bool> Function(Book) onBookUpdated;
   final VoidCallback onNavigateToCatalog;
   final VoidCallback onNavigateToMyBooks;
 

@@ -1,5 +1,21 @@
 # 📚 LibFlow — Онлайн кітапхана және электронды кітаптар мобильді қосымшасы
 
+## REST API + PostgreSQL
+
+Жобаға FastAPI сервері және PostgreSQL базасы қосылды. Flutter каталогы
+GET/POST/PUT/DELETE арқылы сервермен жұмыс істейді, офлайн кэш және
+Loading/Success/Error күйлері бар.
+
+**[Іске қосу, endpoint тізімі және 20 талаптың орындалуы → docs/REST_API.md](docs/REST_API.md)**
+
+Серверді жоба түбірінен іске қосу:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File backend/start.ps1
+```
+
+API құжаттамасы: [Swagger UI](http://127.0.0.1:8000/docs).
+
 **LibFlow** — заманауи кітапхана қызметтерін цифрландыруға, оқырмандардың қажетті кітаптарды жылдам табуына, брондауына, электронды түрде оқуына және аудиокітаптарды тыңдауына арналған Flutter мобильді қосымшасы.
 
 ---

@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local server and PostgreSQL runtime
+backend/.venv/
+backend/.postgres/
+backend/.env
+backend/.pytest_cache/
+**/__pycache__/

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'models/book_model.dart';
 import 'screens/auth_screen.dart';
 import 'screens/catalog_screen.dart';
@@ -8,6 +9,7 @@ import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/dummy_books.dart';
 import 'services/library_database_service.dart';
+import 'services/library_repository.dart';
 import 'utils/constants.dart';
 
 void main() async {
@@ -82,11 +84,13 @@ class _LibFlowAppState extends State<LibFlowApp> {
 }
 
 class MainNavigationContainer extends StatefulWidget {
+  final LibraryRepository? repository;
   final bool isDarkMode;
   final ValueChanged<bool> onThemeToggle;
 
   const MainNavigationContainer({
     super.key,
+    this.repository,
     required this.isDarkMode,
     required this.onThemeToggle,
   });
@@ -98,45 +102,43 @@ class MainNavigationContainer extends StatefulWidget {
 
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
   bool _showSplash = true;
-  bool _isAuthenticated = true; // Set to true by default for immediate prototype viewing
+  bool _isAuthenticated =
+      true; // Set to true by default for immediate prototype viewing
   int _currentIndex = 0;
   List<Book> _books = DummyDataService.getInitialBooks();
+  late final LibraryRepository _repository;
 
   @override
   void initState() {
     super.initState();
+    _repository = widget.repository ?? LibraryRepository();
+    _repository.addListener(_repositoryChanged);
     _loadBooksFromDatabase();
+    _repository.refresh();
+  }
+
+  void _repositoryChanged() {
+    if (mounted) setState(() => _books = _repository.books);
+  }
+
+  @override
+  void dispose() {
+    _repository.removeListener(_repositoryChanged);
+    if (widget.repository == null) _repository.dispose();
+    super.dispose();
   }
 
   void _loadBooksFromDatabase() {
     setState(() {
-      _books = LibraryDatabaseService().getAllBooks();
+      _books = _repository.books;
     });
   }
 
-  void _handleBookUpdate(Book updatedBook) async {
-    await LibraryDatabaseService().updateBook(updatedBook);
-    setState(() {
-      final index = _books.indexWhere((b) => b.id == updatedBook.id);
-      if (index != -1) {
-        _books[index] = updatedBook;
-      }
-    });
-  }
+  Future<bool> _handleBookUpdate(Book book) => _repository.update(book);
 
-  void _handleBookAdd(Book newBook) async {
-    await LibraryDatabaseService().insertBook(newBook);
-    setState(() {
-      _books.insert(0, newBook);
-    });
-  }
+  Future<bool> _handleBookAdd(Book book) => _repository.add(book);
 
-  void _handleBookDelete(String bookId) async {
-    await LibraryDatabaseService().deleteBook(bookId);
-    setState(() {
-      _books.removeWhere((b) => b.id == bookId);
-    });
-  }
+  Future<bool> _handleBookDelete(String id) => _repository.delete(id);
 
   @override
   Widget build(BuildContext context) {
@@ -173,10 +175,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         onBookAdded: _handleBookAdd,
         onBookDeleted: _handleBookDelete,
       ),
-      MyBooksScreen(
-        books: _books,
-        onBookUpdated: _handleBookUpdate,
-      ),
+      MyBooksScreen(books: _books, onBookUpdated: _handleBookUpdate),
       ProfileScreen(
         isDarkMode: widget.isDarkMode,
         onThemeToggle: widget.onThemeToggle,
@@ -189,14 +188,56 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      body: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Icon(
+                  _repository.status == LibraryStatus.error
+                      ? Icons.cloud_off
+                      : Icons.cloud_done,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _repository.status == LibraryStatus.loading
+                        ? 'Сервермен байланысуда…'
+                        : _repository.error ??
+                              (_repository.status == LibraryStatus.success
+                                  ? 'Сервермен жаңартылды'
+                                  : 'Жергілікті деректер'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Серверден жаңарту',
+                  onPressed: _repository.status == LibraryStatus.loading
+                      ? null
+                      : () => _repository.refresh(),
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+          ),
+          if (_repository.status == LibraryStatus.loading)
+            const LinearProgressIndicator(),
+          Expanded(
+            child: IndexedStack(index: _currentIndex, children: screens),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        backgroundColor: widget.isDarkMode ? AppColors.surfaceDark : Colors.white,
-        indicatorColor: AppColors.primary.withAlpha(widget.isDarkMode ? 60 : 30),
+        backgroundColor: widget.isDarkMode
+            ? AppColors.surfaceDark
+            : Colors.white,
+        indicatorColor: AppColors.primary.withAlpha(
+          widget.isDarkMode ? 60 : 30,
+        ),
         elevation: 3,
         height: 68,
         onDestinationSelected: (index) {
@@ -212,12 +253,18 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           ),
           NavigationDestination(
             icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view_rounded, color: AppColors.primary),
+            selectedIcon: Icon(
+              Icons.grid_view_rounded,
+              color: AppColors.primary,
+            ),
             label: 'Каталог',
           ),
           NavigationDestination(
             icon: Icon(Icons.favorite_border_rounded),
-            selectedIcon: Icon(Icons.favorite_rounded, color: AppColors.primary),
+            selectedIcon: Icon(
+              Icons.favorite_rounded,
+              color: AppColors.primary,
+            ),
             label: 'Таңдаулы',
           ),
           NavigationDestination(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
 import '../services/books_api_service.dart';
 import '../services/library_database_service.dart';
@@ -10,9 +11,9 @@ enum CatalogSource { all, openLibrary, googleBooks, localOnly }
 
 class CatalogScreen extends StatefulWidget {
   final List<Book> books;
-  final Function(Book) onBookUpdated;
-  final Function(Book)? onBookAdded;
-  final Function(String bookId)? onBookDeleted;
+  final Future<bool> Function(Book) onBookUpdated;
+  final Future<bool> Function(Book)? onBookAdded;
+  final Future<bool> Function(String bookId)? onBookDeleted;
 
   const CatalogScreen({
     super.key,
@@ -68,7 +69,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
           results = await BooksApiService.searchOpenLibrary(query, limit: 20);
           break;
         case CatalogSource.googleBooks:
-          results = await BooksApiService.searchGoogleBooks(query, maxResults: 20);
+          results = await BooksApiService.searchGoogleBooks(
+            query,
+            maxResults: 20,
+          );
           break;
         case CatalogSource.all:
           results = await BooksApiService.searchCombined(query, limit: 25);
@@ -131,7 +135,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   children: [
                     const Text(
                       'Кітаптарды сұрыптау',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -140,12 +147,36 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _buildSortTile('Атауы бойынша (А-дан Я-ға дейін)', BookSortOption.titleAsc, Icons.sort_by_alpha_rounded),
-                _buildSortTile('Атауы бойынша (Я-дан А-ға дейін)', BookSortOption.titleDesc, Icons.sort_by_alpha_rounded),
-                _buildSortTile('Рейтингі бойынша (Ең жоғары бағаланғандар)', BookSortOption.ratingDesc, Icons.star_rounded),
-                _buildSortTile('Шыққан жылы бойынша (Жаңа кітаптар)', BookSortOption.yearDesc, Icons.calendar_month_rounded),
-                _buildSortTile('Шыққан жылы бойынша (Ескі кітаптар)', BookSortOption.yearAsc, Icons.history_rounded),
-                _buildSortTile('Бет саны бойынша (Шағын кітаптар)', BookSortOption.pagesAsc, Icons.auto_stories_rounded),
+                _buildSortTile(
+                  'Атауы бойынша (А-дан Я-ға дейін)',
+                  BookSortOption.titleAsc,
+                  Icons.sort_by_alpha_rounded,
+                ),
+                _buildSortTile(
+                  'Атауы бойынша (Я-дан А-ға дейін)',
+                  BookSortOption.titleDesc,
+                  Icons.sort_by_alpha_rounded,
+                ),
+                _buildSortTile(
+                  'Рейтингі бойынша (Ең жоғары бағаланғандар)',
+                  BookSortOption.ratingDesc,
+                  Icons.star_rounded,
+                ),
+                _buildSortTile(
+                  'Шыққан жылы бойынша (Жаңа кітаптар)',
+                  BookSortOption.yearDesc,
+                  Icons.calendar_month_rounded,
+                ),
+                _buildSortTile(
+                  'Шыққан жылы бойынша (Ескі кітаптар)',
+                  BookSortOption.yearAsc,
+                  Icons.history_rounded,
+                ),
+                _buildSortTile(
+                  'Бет саны бойынша (Шағын кітаптар)',
+                  BookSortOption.pagesAsc,
+                  Icons.auto_stories_rounded,
+                ),
                 const SizedBox(height: 10),
               ],
             ),
@@ -207,13 +238,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
       baseList = _apiSearchResults;
     } else {
       baseList = widget.books.where((book) {
-        final matchesQuery = query.isEmpty ||
+        final matchesQuery =
+            query.isEmpty ||
             book.title.toLowerCase().contains(query) ||
             book.author.toLowerCase().contains(query) ||
             book.isbn.toLowerCase().contains(query) ||
             book.description.toLowerCase().contains(query);
 
-        final matchesCategory = _selectedCategory == 'Барлығы' ||
+        final matchesCategory =
+            _selectedCategory == 'Барлығы' ||
             book.category == _selectedCategory;
 
         final matchesAvailable = !_onlyAvailable || book.isAvailable;
@@ -240,8 +273,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Кітаптар каталогы',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Кітаптар каталогы',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
         actions: [
           IconButton(
@@ -252,14 +287,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => BookFormScreen(
-                    onSave: (newBook) {
-                      if (widget.onBookAdded != null) {
-                        widget.onBookAdded!(newBook);
-                      } else {
-                        widget.onBookUpdated(newBook);
-                      }
-                      setState(() {});
-                    },
+                    onSave: (newBook) =>
+                        (widget.onBookAdded ?? widget.onBookUpdated)(newBook),
                   ),
                 ),
               );
@@ -285,8 +314,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     onSubmitted: (val) => _performOnlineSearch(val),
                     decoration: InputDecoration(
                       hintText: 'Атауы, авторы, ISBN немесе тақырыбы...',
-                      prefixIcon: const Icon(Icons.search_rounded,
-                          color: AppColors.primaryLight),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.primaryLight,
+                      ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear),
@@ -300,8 +331,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             )
                           : null,
                       filled: true,
-                      fillColor:
-                          isDark ? AppColors.surfaceDark : Colors.grey[100],
+                      fillColor: isDark
+                          ? AppColors.surfaceDark
+                          : Colors.grey[100],
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -327,8 +359,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white),
+                        : const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                          ),
                     tooltip: 'Іздеу (API + Қор)',
                     onPressed: _isLoadingApi
                         ? null
@@ -384,12 +418,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                'Барлығы',
-                'Роман',
-                'Тарих',
-                'Басқа',
-              ].map((cat) {
+              children: ['Барлығы', 'Роман', 'Тарих', 'Басқа'].map((cat) {
                 final isSelected = _selectedCategory == cat;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -398,12 +427,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       setState(() {
                         _selectedCategory = cat;
                       });
-                      if (cat != 'Барлығы' && _selectedSource != CatalogSource.localOnly) {
+                      if (cat != 'Барлығы' &&
+                          _selectedSource != CatalogSource.localOnly) {
                         _performOnlineSearch(cat);
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.primary
@@ -412,7 +445,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         border: Border.all(
                           color: isSelected
                               ? AppColors.primary
-                              : (isDark ? AppColors.borderDark : AppColors.borderLight),
+                              : (isDark
+                                    ? AppColors.borderDark
+                                    : AppColors.borderLight),
                         ),
                       ),
                       child: Text(
@@ -420,8 +455,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         style: TextStyle(
                           color: isSelected
                               ? Colors.white
-                              : (isDark ? Colors.white70 : AppColors.textPrimaryLight),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              : (isDark
+                                    ? Colors.white70
+                                    : AppColors.textPrimaryLight),
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                           fontSize: 12,
                         ),
                       ),
@@ -440,11 +479,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
               child: Row(
                 children: [
                   FilterChip(
-                    avatar: Icon(Icons.check_circle_outline,
-                        size: 16,
-                        color: _onlyAvailable ? Colors.white : Colors.green),
-                    label: const Text('Тек қолда барлар',
-                        style: TextStyle(fontSize: 11)),
+                    avatar: Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: _onlyAvailable ? Colors.white : Colors.green,
+                    ),
+                    label: const Text(
+                      'Тек қолда барлар',
+                      style: TextStyle(fontSize: 11),
+                    ),
                     selected: _onlyAvailable,
                     onSelected: (val) => setState(() => _onlyAvailable = val),
                     selectedColor: AppColors.success,
@@ -454,11 +497,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
-                    avatar: Icon(Icons.headphones,
-                        size: 16,
-                        color: _onlyAudio ? Colors.white : Colors.amber),
-                    label: const Text('Аудиокітап',
-                        style: TextStyle(fontSize: 11)),
+                    avatar: Icon(
+                      Icons.headphones,
+                      size: 16,
+                      color: _onlyAudio ? Colors.white : Colors.amber,
+                    ),
+                    label: const Text(
+                      'Аудиокітап',
+                      style: TextStyle(fontSize: 11),
+                    ),
                     selected: _onlyAudio,
                     onSelected: (val) => setState(() => _onlyAudio = val),
                     selectedColor: Colors.amber[800],
@@ -468,11 +515,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
-                    avatar: Icon(Icons.menu_book,
-                        size: 16,
-                        color: _onlyEBook ? Colors.white : Colors.blue),
-                    label: const Text('Электронды',
-                        style: TextStyle(fontSize: 11)),
+                    avatar: Icon(
+                      Icons.menu_book,
+                      size: 16,
+                      color: _onlyEBook ? Colors.white : Colors.blue,
+                    ),
+                    label: const Text(
+                      'Электронды',
+                      style: TextStyle(fontSize: 11),
+                    ),
                     selected: _onlyEBook,
                     onSelected: (val) => setState(() => _onlyEBook = val),
                     selectedColor: AppColors.primaryLight,
@@ -508,7 +559,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.info.withAlpha(30),
                           borderRadius: BorderRadius.circular(6),
@@ -537,7 +590,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(50, 30),
                     ),
-                    child: const Text('Тазарту', style: TextStyle(fontSize: 12)),
+                    child: const Text(
+                      'Тазарту',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
               ],
             ),
@@ -554,8 +610,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline,
-                      size: 18, color: AppColors.warning),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 18,
+                    color: AppColors.warning,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -584,7 +643,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withAlpha(25),
                         borderRadius: BorderRadius.circular(10),
@@ -605,7 +667,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   onTap: () => _showSortModal(isDark),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark ? AppColors.surfaceDark : Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -617,7 +682,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.sort_rounded, size: 16, color: AppColors.primary),
+                        const Icon(
+                          Icons.sort_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 5),
                         Text(
                           _sortOptionLabel,
@@ -652,165 +721,193 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                   )
                 : results.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white10 : Colors.grey[200],
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.search_off_rounded,
-                                  size: 44,
-                                  color: isDark ? Colors.white38 : Colors.grey[500],
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              const Text(
-                                'Сәйкес кітап табылмады',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Іздеу сұрауын немесе сүзгі параметрлерін өзгертіп көріңіз.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.refresh_rounded, size: 18),
-                                label: const Text('Сүзгілерді тазарту'),
-                                onPressed: _clearAllFilters,
-                              ),
-                            ],
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white10 : Colors.grey[200],
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.search_off_rounded,
+                              size: 44,
+                              color: isDark ? Colors.white38 : Colors.grey[500],
+                            ),
                           ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: results.length,
-                        itemBuilder: (context, index) {
-                          final book = results[index];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => BookDetailScreen(
-                                    book: book,
-                                    onBookUpdated: widget.onBookUpdated,
-                                    onBookDeleted: (deletedId) {
-                                      if (widget.onBookDeleted != null) {
-                                        widget.onBookDeleted!(deletedId);
-                                      }
-                                      setState(() {});
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.surfaceDark : Colors.white,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                                ),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Сәйкес кітап табылмады',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Іздеу сұрауын немесе сүзгі параметрлерін өзгертіп көріңіз.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark
+                                  ? AppColors.textSecondaryDark
+                                  : AppColors.textSecondaryLight,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Row(
-                                children: [
-                                  // Mini Book Cover with circle
-                                  Container(
-                                    width: 50,
-                                    height: 68,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(colors: book.coverGradient),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: const Color(0xFFD4A373), width: 2),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          book.title,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          book.author,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD4A373)),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              '${book.rating}',
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '•  ${book.category}',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: isDark ? Colors.white38 : Colors.grey[400],
-                                  ),
-                                ],
+                            ),
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: const Text('Сүзгілерді тазарту'),
+                            onPressed: _clearAllFilters,
+                          ),
+                        ],
+                      ),
+                    ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    itemCount: results.length,
+                    itemBuilder: (context, index) {
+                      final book = results[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BookDetailScreen(
+                                book: book,
+                                onBookUpdated: widget.onBookUpdated,
+                                onBookDeleted: widget.onBookDeleted,
                               ),
                             ),
                           );
                         },
-                      ),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.surfaceDark
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isDark
+                                  ? AppColors.borderDark
+                                  : AppColors.borderLight,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Mini Book Cover with circle
+                              Container(
+                                width: 50,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: book.coverGradient,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      width: 22,
+                                      height: 22,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFFD4A373),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      book.title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      book.author,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? AppColors.textSecondaryDark
+                                            : AppColors.textSecondaryLight,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.star_rounded,
+                                          size: 14,
+                                          color: Color(0xFFD4A373),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${book.rating}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '•  ${book.category}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDark
+                                                ? AppColors.textSecondaryDark
+                                                : AppColors.textSecondaryLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: isDark
+                                    ? Colors.white38
+                                    : Colors.grey[400],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -818,20 +915,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Кітап қосу', style: TextStyle(fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Кітап қосу',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => BookFormScreen(
-                onSave: (newBook) {
-                  if (widget.onBookAdded != null) {
-                    widget.onBookAdded!(newBook);
-                  } else {
-                    widget.onBookUpdated(newBook);
-                  }
-                  setState(() {});
-                },
+                onSave: (newBook) =>
+                    (widget.onBookAdded ?? widget.onBookUpdated)(newBook),
               ),
             ),
           );

@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:path_provider/path_provider.dart';
+
 import '../models/book_model.dart';
 import 'dummy_books.dart';
 
@@ -14,12 +17,8 @@ enum BookSortOption {
   pagesAsc, // Бет саны бойынша (Аз беттілер алдымен)
 }
 
-/// Практикалық жұмыс №4: Локалды деректер қоры мен репозиторий қабаты.
-/// 
-/// Бұл қызмет SQLite архитектурасына сәйкес кестелерді құруды (DDL),
-/// толық CRUD операцияларын (Create, Read, Update, Delete),
-/// іздеу, сүзгілеу, көппараметрлі сұрыптау және интернетсіз режимде
-/// деректердің жергілікті тұрақты сақталуын қамтамасыз етеді.
+/// JSON файлындағы тұрақты офлайн кэш және жергілікті оқырман деректері.
+/// Сервермен синхрондауды LibraryRepository орындайды.
 class LibraryDatabaseService {
   static final LibraryDatabaseService _instance =
       LibraryDatabaseService._internal();
@@ -28,6 +27,8 @@ class LibraryDatabaseService {
 
   static const String _dbFileName = 'libflow_offline_database.json';
   bool _isInitialized = false;
+  // Tests can opt into an isolated directory without platform plugins.
+  static String? storageDirectoryOverride;
 
   // Локалды жадтағы кестелер (Tables)
   final List<Book> _booksTable = [];
@@ -48,9 +49,16 @@ class LibraryDatabaseService {
   /// Деректер қорын инициализациялау (Database Initialization)
   Future<void> initializeDatabase() async {
     if (_isInitialized) return;
+    var hasStoredBooks = false;
 
     try {
       final file = await _getDatabaseFile();
+      // Preserve the previous desktop cache when moving to app support storage.
+      if (storageDirectoryOverride == null &&
+          !Platform.isAndroid && !Platform.isIOS && !await file.exists()) {
+        final legacy = File('${Directory.current.path}/$_dbFileName');
+        if (await legacy.exists()) await legacy.copy(file.path);
+      }
       if (await file.exists()) {
         final content = await file.readAsString();
         if (content.trim().isNotEmpty) {
@@ -58,6 +66,7 @@ class LibraryDatabaseService {
 
           // 1. Books table
           if (data['books'] != null) {
+            hasStoredBooks = true;
             _booksTable.clear();
             for (var item in data['books']) {
               _booksTable.add(Book.fromMap(Map<String, dynamic>.from(item)));
@@ -68,7 +77,9 @@ class LibraryDatabaseService {
           if (data['authors'] != null) {
             _authorsTable.clear();
             for (var item in data['authors']) {
-              _authorsTable.add(Author.fromMap(Map<String, dynamic>.from(item)));
+              _authorsTable.add(
+                Author.fromMap(Map<String, dynamic>.from(item)),
+              );
             }
           }
 
@@ -76,7 +87,9 @@ class LibraryDatabaseService {
           if (data['categories'] != null) {
             _categoriesTable.clear();
             for (var item in data['categories']) {
-              _categoriesTable.add(BookCategory.fromMap(Map<String, dynamic>.from(item)));
+              _categoriesTable.add(
+                BookCategory.fromMap(Map<String, dynamic>.from(item)),
+              );
             }
           }
 
@@ -84,7 +97,9 @@ class LibraryDatabaseService {
           if (data['readers'] != null) {
             _readersTable.clear();
             for (var item in data['readers']) {
-              _readersTable.add(Reader.fromMap(Map<String, dynamic>.from(item)));
+              _readersTable.add(
+                Reader.fromMap(Map<String, dynamic>.from(item)),
+              );
             }
           }
 
@@ -100,22 +115,28 @@ class LibraryDatabaseService {
           if (data['reviews'] != null) {
             _reviewsTable.clear();
             for (var item in data['reviews']) {
-              _reviewsTable.add(BookReview.fromMap(Map<String, dynamic>.from(item)));
+              _reviewsTable.add(
+                BookReview.fromMap(Map<String, dynamic>.from(item)),
+              );
             }
           }
 
-          debugPrint('LibraryDatabaseService: Деректер қоры локалды файлдан сәтті оқылды. Кітаптар саны: ${_booksTable.length}');
+          debugPrint(
+            'LibraryDatabaseService: Деректер қоры локалды файлдан сәтті оқылды. Кітаптар саны: ${_booksTable.length}',
+          );
         }
       }
 
       // Егер деректер қоры бос болса, бастапқы демонстрациялық мәндермен толтыру (Seed Database)
-      if (_booksTable.isEmpty) {
+      if (_booksTable.isEmpty && !hasStoredBooks) {
         await _seedInitialData();
       }
 
       _isInitialized = true;
     } catch (e, stack) {
-      debugPrint('Қате: Деректер қорын инициализациялау кезінде ақау шықты: $e\n$stack');
+      debugPrint(
+        'Қате: Деректер қорын инициализациялау кезінде ақау шықты: $e\n$stack',
+      );
       // Қате болған жағдайда да қосымша жұмысын тоқтатпауы үшін бастапқы мәндермен жүктеу
       if (_booksTable.isEmpty) {
         _booksTable.addAll(DummyDataService.getInitialBooks());
@@ -150,19 +171,83 @@ class LibraryDatabaseService {
     _booksTable.addAll(DummyDataService.getInitialBooks());
 
     _categoriesTable.addAll([
-      BookCategory(id: 'cat_1', name: 'Көркем әдебиет', description: 'Классикалық романдар мен әңгімелер', iconName: 'auto_stories', bookCount: 12),
-      BookCategory(id: 'cat_2', name: 'Тарих', description: 'Тарихи шежіре, хроника және зерттеулер', iconName: 'history_edu', bookCount: 8),
-      BookCategory(id: 'cat_3', name: 'Классика', description: 'Ұлттық және әлемдік классика', iconName: 'menu_book', bookCount: 15),
-      BookCategory(id: 'cat_4', name: 'Психология', description: 'Тұлғалық даму, әдеттер мен мотивация', iconName: 'psychology', bookCount: 6),
-      BookCategory(id: 'cat_5', name: 'IT және Техника', description: 'Бағдарламалау, жасанды интеллект, инженерия', iconName: 'computer', bookCount: 9),
-      BookCategory(id: 'cat_6', name: 'Роман', description: 'Драма, романтикалық және қоғамдық туындылар', iconName: 'local_library', bookCount: 11),
+      BookCategory(
+        id: 'cat_1',
+        name: 'Көркем әдебиет',
+        description: 'Классикалық романдар мен әңгімелер',
+        iconName: 'auto_stories',
+        bookCount: 12,
+      ),
+      BookCategory(
+        id: 'cat_2',
+        name: 'Тарих',
+        description: 'Тарихи шежіре, хроника және зерттеулер',
+        iconName: 'history_edu',
+        bookCount: 8,
+      ),
+      BookCategory(
+        id: 'cat_3',
+        name: 'Классика',
+        description: 'Ұлттық және әлемдік классика',
+        iconName: 'menu_book',
+        bookCount: 15,
+      ),
+      BookCategory(
+        id: 'cat_4',
+        name: 'Психология',
+        description: 'Тұлғалық даму, әдеттер мен мотивация',
+        iconName: 'psychology',
+        bookCount: 6,
+      ),
+      BookCategory(
+        id: 'cat_5',
+        name: 'IT және Техника',
+        description: 'Бағдарламалау, жасанды интеллект, инженерия',
+        iconName: 'computer',
+        bookCount: 9,
+      ),
+      BookCategory(
+        id: 'cat_6',
+        name: 'Роман',
+        description: 'Драма, романтикалық және қоғамдық туындылар',
+        iconName: 'local_library',
+        bookCount: 11,
+      ),
     ]);
 
     _authorsTable.addAll([
-      Author(id: 'auth_1', fullName: 'Мұхтар Әуезов', biography: 'Ұлы қазақ жазушысы, қоғам қайраткері, филология ғылымының докторы.', birthYear: 1897, country: 'Қазақстан', booksCount: 4),
-      Author(id: 'auth_2', fullName: 'Ілияс Есенберлин', biography: 'Қазақ тарихи романының негізін қалаушы, атақты трилогиялар авторы.', birthYear: 1915, country: 'Қазақстан', booksCount: 3),
-      Author(id: 'auth_3', fullName: 'Әбдіжәміл Нұрпейісов', biography: 'Қазақстанның Халық жазушысы, Арал тақырыбын шебер суреттеген классик.', birthYear: 1924, country: 'Қазақстан', booksCount: 2),
-      Author(id: 'auth_4', fullName: 'Джеймс Клир', biography: 'Әдеттер, шешім қабылдау және үздіксіз өзін-өзі дамыту бойынша әлемдік сарапшы.', birthYear: 1986, country: 'АҚШ', booksCount: 1),
+      Author(
+        id: 'auth_1',
+        fullName: 'Мұхтар Әуезов',
+        biography: 'Ұлы қазақ жазушысы, қоғам қайраткері, филология ғылымының докторы.',
+        birthYear: 1897,
+        country: 'Қазақстан',
+        booksCount: 4,
+      ),
+      Author(
+        id: 'auth_2',
+        fullName: 'Ілияс Есенберлин',
+        biography: 'Қазақ тарихи романының негізін қалаушы, атақты трилогиялар авторы.',
+        birthYear: 1915,
+        country: 'Қазақстан',
+        booksCount: 3,
+      ),
+      Author(
+        id: 'auth_3',
+        fullName: 'Әбдіжәміл Нұрпейісов',
+        biography: 'Қазақстанның Халық жазушысы, Арал тақырыбын шебер суреттеген классик.',
+        birthYear: 1924,
+        country: 'Қазақстан',
+        booksCount: 2,
+      ),
+      Author(
+        id: 'auth_4',
+        fullName: 'Джеймс Клир',
+        biography: 'Әдеттер, шешім қабылдау және үздіксіз өзін-өзі дамыту бойынша әлемдік сарапшы.',
+        birthYear: 1986,
+        country: 'АҚШ',
+        booksCount: 1,
+      ),
     ]);
 
     _readersTable.add(
@@ -248,6 +333,14 @@ class LibraryDatabaseService {
   /// Барлық кітаптар тізімін алу
   List<Book> getAllBooks() {
     return List.from(_booksTable);
+  }
+
+  /// Replace the server catalogue, including removals; keep other local tables.
+  Future<void> replaceBooks(List<Book> books) async {
+    _booksTable
+      ..clear()
+      ..addAll(books);
+    await _persistDatabase();
   }
 
   /// ID бойынша кітапты табу
@@ -388,12 +481,16 @@ class LibraryDatabaseService {
     switch (sortOption) {
       case BookSortOption.titleAsc:
         // Атауы бойынша: А-дан Я-ға дейін
-        sortedList.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        sortedList.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
         break;
 
       case BookSortOption.titleDesc:
         // Атауы бойынша: Я-дан А-ға дейін
-        sortedList.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        sortedList.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
         break;
 
       case BookSortOption.ratingDesc:
@@ -423,9 +520,11 @@ class LibraryDatabaseService {
   /// Жүйелік файл жолын анықтау
   Future<File> _getDatabaseFile() async {
     // Жобаның жергілікті директориясында немесе қолданба деректерінде сақтау
-    final currentDir = Directory.current.path;
+    final currentDir =
+        storageDirectoryOverride ??
+        (await getApplicationSupportDirectory()).path;
+    await Directory(currentDir).create(recursive: true);
     final filePath = '$currentDir/$_dbFileName';
     return File(filePath);
   }
 }
-
