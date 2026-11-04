@@ -629,8 +629,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
           // Figma 07: "Танымал кітаптар" Header + Сұрыптау батырмасы
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Row(
                   children: [
@@ -725,58 +728,62 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white10 : Colors.grey[200],
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.search_off_rounded,
-                              size: 44,
-                              color: isDark ? Colors.white38 : Colors.grey[500],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          const Text(
-                            'Сәйкес кітап табылмады',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Іздеу сұрауын немесе сүзгі параметрлерін өзгертіп көріңіз.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark
-                                  ? AppColors.textSecondaryDark
-                                  : AppColors.textSecondaryLight,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white10
+                                    : Colors.grey[200],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.search_off_rounded,
+                                size: 44,
+                                color: isDark
+                                    ? Colors.white38
+                                    : Colors.grey[500],
                               ),
                             ),
-                            icon: const Icon(Icons.refresh_rounded, size: 18),
-                            label: const Text('Сүзгілерді тазарту'),
-                            onPressed: _clearAllFilters,
-                          ),
-                        ],
+                            const SizedBox(height: 18),
+                            const Text(
+                              'Сәйкес кітап табылмады',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Іздеу сұрауын немесе сүзгі параметрлерін өзгертіп көріңіз.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark
+                                    ? AppColors.textSecondaryDark
+                                    : AppColors.textSecondaryLight,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const Text('Сүзгілерді тазарту'),
+                              onPressed: _clearAllFilters,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     ),
                   )
                 : ListView.builder(
@@ -882,13 +889,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        Text(
-                                          '•  ${book.category}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isDark
-                                                ? AppColors.textSecondaryDark
-                                                : AppColors.textSecondaryLight,
+                                        Flexible(
+                                          child: Text(
+                                            '•  ${book.category}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark
+                                                  ? AppColors.textSecondaryDark
+                                                  : AppColors
+                                                        .textSecondaryLight,
+                                            ),
                                           ),
                                         ),
                                       ],

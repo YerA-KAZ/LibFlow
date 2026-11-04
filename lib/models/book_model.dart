@@ -114,7 +114,9 @@ class Book {
       source: source ?? this.source,
       previewUrl: previewUrl ?? this.previewUrl,
       infoUrl: infoUrl ?? this.infoUrl,
-      isAvailable: isAvailable ?? this.isAvailable,
+      isAvailable:
+          isAvailable ??
+          (availableCopies == null ? this.isAvailable : availableCopies > 0),
       availableCopies: availableCopies ?? this.availableCopies,
       totalCopies: totalCopies ?? this.totalCopies,
       hasEBook: hasEBook ?? this.hasEBook,
@@ -123,8 +125,12 @@ class Book {
       readingContent: readingContent ?? this.readingContent,
       isFavorite: isFavorite ?? this.isFavorite,
       isReserved: isReserved ?? this.isReserved,
-      reservationTime: reservationTime ?? this.reservationTime,
-      reservationCode: reservationCode ?? this.reservationCode,
+      reservationTime: isReserved == false
+          ? null
+          : reservationTime ?? this.reservationTime,
+      reservationCode: isReserved == false
+          ? null
+          : reservationCode ?? this.reservationCode,
       isBorrowed: isBorrowed ?? this.isBorrowed,
       dueDate: dueDate ?? this.dueDate,
     );
@@ -176,7 +182,9 @@ class Book {
       [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
       [const Color(0xFF0F766E), const Color(0xFF14B8A6)],
     ];
-    final colorPair = gradients[(map['id']?.toString() ?? '1').hashCode.abs() % gradients.length];
+    final colorPair =
+        gradients[(map['id']?.toString() ?? '1').hashCode.abs() %
+            gradients.length];
 
     return Book(
       id: map['id']?.toString() ?? UniqueKey().toString(),
@@ -261,14 +269,16 @@ class Book {
     final reviewCount = (volumeInfo['ratingsCount'] as num?)?.toInt() ?? 18;
 
     // Description
-    final description = volumeInfo['description'] as String? ??
+    final description =
+        volumeInfo['description'] as String? ??
         'Бұл кітап Google Books API деректер базасынан алынған. Толық мазмұнын онлайн қарап шығуға болады.';
 
     // Images
     final imageLinks = volumeInfo['imageLinks'] as Map<String, dynamic>?;
     String? coverUrl;
     if (imageLinks != null) {
-      coverUrl = (imageLinks['thumbnail'] ?? imageLinks['smallThumbnail']) as String?;
+      coverUrl =
+          (imageLinks['thumbnail'] ?? imageLinks['smallThumbnail']) as String?;
       if (coverUrl != null && coverUrl.startsWith('http://')) {
         coverUrl = coverUrl.replaceFirst('http://', 'https://');
       }
@@ -308,7 +318,8 @@ class Book {
       totalCopies: 4,
       hasEBook: true,
       hasAudio: false,
-      readingContent: '''$title
+      readingContent:
+          '''$title
 
 Автор: $author
 Дереккөз: Google Books API
@@ -341,8 +352,7 @@ $description
     final pages = (json['number_of_pages_median'] as num?)?.toInt() ?? 280;
 
     // Year
-    final publishYear =
-        (json['first_publish_year'] as num?)?.toInt() ?? 2020;
+    final publishYear = (json['first_publish_year'] as num?)?.toInt() ?? 2020;
 
     // ISBN
     String isbn = 'ISBN-жоқ';
@@ -392,7 +402,8 @@ $description
       totalCopies: 3,
       hasEBook: true,
       hasAudio: false,
-      readingContent: '''$title
+      readingContent:
+          '''$title
 
 Автор: $author
 Басылым жылы: $publishYear
@@ -633,7 +644,8 @@ class Loan {
           ? DateTime.tryParse(map['borrowDate']) ?? DateTime.now()
           : DateTime.now(),
       dueDate: map['dueDate'] != null
-          ? DateTime.tryParse(map['dueDate']) ?? DateTime.now().add(const Duration(days: 14))
+          ? DateTime.tryParse(map['dueDate']) ??
+                DateTime.now().add(const Duration(days: 14))
           : DateTime.now().add(const Duration(days: 14)),
       returnDate: map['returnDate'] != null
           ? DateTime.tryParse(map['returnDate'])

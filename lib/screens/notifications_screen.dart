@@ -1,19 +1,53 @@
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
-import '../services/dummy_books.dart';
 import '../utils/constants.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final VoidCallback onNavigateToMyBooks;
+  final List<Book> books;
 
-  const NotificationsScreen({super.key, required this.onNavigateToMyBooks});
+  const NotificationsScreen({
+    super.key,
+    required this.onNavigateToMyBooks,
+    this.books = const [],
+  });
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<AppNotification> _notifications = DummyDataService.getSampleNotifications();
+  late final List<AppNotification> _notifications;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _notifications = [
+      for (final book in widget.books)
+        if (book.isBorrowed &&
+            book.dueDate != null &&
+            book.dueDate!.difference(now) <= const Duration(days: 2))
+          AppNotification(
+            id: 'due_${book.id}',
+            title: 'Қайтару мерзімі',
+            message: '«${book.title}» кітабын қайтару мерзімін тексеріңіз.',
+            time: now,
+            type: 'deadline',
+          ),
+      for (final book in widget.books)
+        if (book.isReserved)
+          AppNotification(
+            id: 'reserved_${book.id}',
+            title: 'Белсенді бронь',
+            message:
+                '«${book.title}» кітабының бронь кодын Менің кітаптарым бөлімінен көріңіз.',
+            time: book.reservationTime ?? now,
+            type: 'reservation',
+          ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,8 +55,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Хабарламалар',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Хабарламалар',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
         actions: [
           TextButton(
@@ -42,11 +78,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_none,
-                      size: 64, color: isDark ? Colors.white24 : Colors.grey[400]),
+                  Icon(
+                    Icons.notifications_none,
+                    size: 64,
+                    color: isDark ? Colors.white24 : Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
-                  const Text('Жаңа хабарламалар жоқ',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Жаңа хабарламалар жоқ',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
             )
@@ -75,7 +116,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 return GestureDetector(
                   onTap: () {
                     setState(() => notif.isRead = true);
-                    if (notif.type == 'deadline' || notif.type == 'reservation') {
+                    if (notif.type == 'deadline' ||
+                        notif.type == 'reservation') {
                       Navigator.pop(context);
                       widget.onNavigateToMyBooks();
                     }
@@ -86,11 +128,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     decoration: BoxDecoration(
                       color: notif.isRead
                           ? (isDark ? AppColors.surfaceDark : Colors.white)
-                          : (isDark ? const Color(0xFF1E2D4A) : const Color(0xFFEFF6FF)),
+                          : (isDark
+                                ? const Color(0xFF1E2D4A)
+                                : const Color(0xFFEFF6FF)),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: notif.isRead
-                            ? (isDark ? AppColors.borderDark : AppColors.borderLight)
+                            ? (isDark
+                                  ? AppColors.borderDark
+                                  : AppColors.borderLight)
                             : AppColors.primaryLight.withAlpha(100),
                         width: notif.isRead ? 1 : 1.5,
                       ),
@@ -112,7 +158,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
                                     child: Text(
@@ -146,7 +193,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 '${notif.time.hour}:${notif.time.minute.toString().padLeft(2, '0')} • бүгін',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
                               ),
                             ],
                           ),

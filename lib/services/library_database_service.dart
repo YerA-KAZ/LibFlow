@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/book_model.dart';
 import 'dummy_books.dart';
+import 'app_log.dart';
 
 /// Сұрыптау критерийлері (Sorting Options)
 enum BookSortOption {
@@ -161,7 +162,8 @@ class LibraryDatabaseService {
       };
       await file.writeAsString(jsonEncode(data), flush: true);
     } catch (e) {
-      debugPrint('Қате: Деректер қорын сақтау кезінде ақау шықты: $e');
+      AppLog.event('cache.persist_failed', error: e);
+      rethrow;
     }
   }
 

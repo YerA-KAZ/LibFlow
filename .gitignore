@@ -51,5 +51,6 @@ app.*.map.json
 backend/.venv/
 backend/.postgres/
 backend/.env
+/delivery/
 backend/.pytest_cache/
 **/__pycache__/

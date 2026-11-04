@@ -33,7 +33,7 @@ class LibraryApiService {
                    ))
                .replaceFirst(RegExp(r'/+$'), '');
 
-  String get _url => baseUrl.isNotEmpty
+  String get resolvedBaseUrl => baseUrl.isNotEmpty
       ? baseUrl
       : (!kIsWeb && defaultTargetPlatform == TargetPlatform.android
             ? 'http://10.0.2.2:8000'
@@ -54,7 +54,7 @@ class LibraryApiService {
 
   Future<dynamic> _request(String method, String path, [Book? book]) async {
     try {
-      final request = http.Request(method, Uri.parse('$_url$path'));
+      final request = http.Request(method, Uri.parse('$resolvedBaseUrl$path'));
       request.headers['Content-Type'] = 'application/json; charset=utf-8';
       if (book != null) request.body = jsonEncode(_payload(book));
       final response = await (() async {

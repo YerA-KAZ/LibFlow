@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+
+import 'app_log.dart';
+
 import 'package:http/http.dart' as http;
+
 import '../models/book_model.dart';
 
 class BooksApiService {
@@ -23,12 +26,12 @@ class BooksApiService {
           ? '&key=$googleApiKey'
           : '';
       final url = Uri.parse(
-          '$googleBooksBaseUrl?q=${Uri.encodeComponent(query)}&maxResults=$maxResults$keyParam');
+        '$googleBooksBaseUrl?q=${Uri.encodeComponent(query)}&maxResults=$maxResults$keyParam',
+      );
 
-      final response = await http.get(
-        url,
-        headers: {'User-Agent': 'LibFlowApp/1.0 (Flutter Mobile)'},
-      ).timeout(const Duration(seconds: 6));
+      final response = await http
+          .get(url, headers: {'User-Agent': 'LibFlowApp/1.0 (Flutter Mobile)'})
+          .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
@@ -40,18 +43,12 @@ class BooksApiService {
               .toList();
         }
       } else if (response.statusCode == 429) {
-        if (kDebugMode) {
-          print('Google Books API: Quota reached (429). Using fallback.');
-        }
+        AppLog.event('google_books.quota_exceeded');
       } else {
-        if (kDebugMode) {
-          print('Google Books API error: ${response.statusCode}');
-        }
+        AppLog.event('google_books.http_${response.statusCode}');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Google Books API exception: $e');
-      }
+      AppLog.event('google_books.request_failed', error: e);
     }
     return [];
   }
@@ -63,12 +60,17 @@ class BooksApiService {
   }) async {
     try {
       final url = Uri.parse(
-          '$openLibraryBaseUrl?q=${Uri.encodeComponent(query)}&limit=$limit');
+        '$openLibraryBaseUrl?q=${Uri.encodeComponent(query)}&limit=$limit',
+      );
 
-      final response = await http.get(
-        url,
-        headers: {'User-Agent': 'LibFlowApp/1.0 (contact: info@libflow.kz)'},
-      ).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'User-Agent': 'LibFlowApp/1.0 (contact: info@libflow.kz)',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
@@ -80,14 +82,10 @@ class BooksApiService {
               .toList();
         }
       } else {
-        if (kDebugMode) {
-          print('Open Library API error: ${response.statusCode}');
-        }
+        AppLog.event('open_library.http_${response.statusCode}');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Open Library API exception: $e');
-      }
+      AppLog.event('open_library.request_failed', error: e);
     }
     return [];
   }

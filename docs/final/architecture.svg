@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1110" viewBox="0 0 1600 1110">
+<rect width="1600" height="1110" fill="#f3f6f3"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#62756b"/></marker></defs>
+<text x="45" y="76" font-family="Arial,sans-serif" font-size="46" fill="#183e30" font-weight="700">LibFlow</text>
+<text x="245" y="69" font-family="Arial,sans-serif" font-size="25" fill="#62756b" font-weight="400">APPLICATION ARCHITECTURE</text>
+<text x="45" y="119" font-family="Arial,sans-serif" font-size="22" fill="#183e30" font-weight="400">Flutter mobile app  /  local authentication  /  REST + WebSocket  /  PostgreSQL</text>
+<rect x="40" y="150" width="950" height="870" rx="18" fill="#e9f0eb" stroke="#cbd9d0" stroke-width="2"/>
+<rect x="1040" y="150" width="520" height="870" rx="18" fill="#eef0f6" stroke="#d2d8e6" stroke-width="2"/>
+<text x="68" y="182" font-family="Arial,sans-serif" font-size="18" fill="#183e30" font-weight="700">ANDROID / iOS CLIENT</text>
+<text x="1066" y="182" font-family="Arial,sans-serif" font-size="18" fill="#183e30" font-weight="700">SERVER / EXTERNAL SERVICES</text>
+<rect x="80" y="210" width="870" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="102" y="253" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">UI · Screens &amp; navigation</text>
+<text x="102" y="286" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Auth / Splash → Home / Catalogue / My Books / Profile</text>
+<text x="102" y="312" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Detail / Form / Reader / Card / Notifications / QR scanner</text>
+<rect x="80" y="410" width="350" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="102" y="453" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">AuthProvider</text>
+<text x="102" y="486" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Local account + session</text>
+<text x="102" y="512" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Provider / ChangeNotifier</text>
+<rect x="540" y="410" width="410" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="562" y="453" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">LibraryRepository</text>
+<text x="562" y="486" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">REST CRUD + realtime events</text>
+<text x="562" y="512" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Loading / Success / Error + logs</text>
+<rect x="80" y="610" width="350" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="102" y="653" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">Secure storage</text>
+<text x="102" y="686" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Salted PBKDF2 password hash</text>
+<text x="102" y="712" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">30-day local session</text>
+<rect x="540" y="610" width="410" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="562" y="653" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">Offline JSON cache</text>
+<text x="562" y="686" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Books + personal reading state</text>
+<text x="562" y="712" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Application support directory</text>
+<rect x="80" y="835" width="350" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="102" y="878" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">QR scanner</text>
+<text x="102" y="911" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Permission handling</text>
+<text x="102" y="937" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Local reservation validation</text>
+<rect x="540" y="835" width="410" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="562" y="878" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">Device services</text>
+<text x="562" y="911" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Camera / mobile_scanner</text>
+<text x="562" y="937" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">QR rendering / qr_flutter</text>
+<rect x="1090" y="210" width="420" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="1112" y="253" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">External book search</text>
+<text x="1112" y="286" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Google Books / Open Library</text>
+<text x="1112" y="312" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Search results → catalogue import</text>
+<rect x="1090" y="410" width="420" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="1112" y="453" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">FastAPI</text>
+<text x="1112" y="486" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">REST /api/books · WS /ws/catalogue</text>
+<text x="1112" y="512" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Validation → commit → broadcast</text>
+<rect x="1090" y="610" width="420" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="1112" y="653" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">PostgreSQL</text>
+<text x="1112" y="686" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">books: id / JSONB / updated_at</text>
+<text x="1112" y="712" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">schema_migrations + seed once</text>
+<rect x="1090" y="835" width="420" height="130" rx="18" fill="#ffffff" stroke="#cbd9d0" stroke-width="2"/>
+<text x="1112" y="878" font-family="Arial,sans-serif" font-size="25" fill="#183e30" font-weight="700">Test &amp; diagnostics</text>
+<text x="1112" y="911" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Unit / Widget / API / Android</text>
+<text x="1112" y="937" font-family="Arial,sans-serif" font-size="19" fill="#52665b" font-weight="400">Analyzer · terminal logs · APK</text>
+<polyline points="250,340 250,410" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="745,340 745,410" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="250,540 250,610" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="745,540 745,610" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="80,275 62,275 62,900 80,900" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="430,900 540,900" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="452" y="885" font-family="Arial,sans-serif" font-size="17" fill="#52665b" font-weight="400">camera</text>
+<polyline points="950,445 1090,445" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="990" y="431" font-family="Arial,sans-serif" font-size="17" fill="#52665b" font-weight="400">REST</text>
+<polyline points="1090,500 950,500" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="982" y="527" font-family="Arial,sans-serif" font-size="17" fill="#52665b" font-weight="400">WS events</text>
+<polyline points="1300,540 1300,610" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<polyline points="950,260 1090,260" fill="none" stroke="#62756b" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="984" y="246" font-family="Arial,sans-serif" font-size="17" fill="#52665b" font-weight="400">HTTPS</text>
+<text x="68" y="1064" font-family="Arial,sans-serif" font-size="19" fill="#183e30" font-weight="400">Auth stays on the device. The API has no token/RBAC layer. The notification hub uses one server process.</text>
+<text x="68" y="1093" font-family="Arial,sans-serif" font-size="17" fill="#62756b" font-weight="400">LibFlow 1.0.0+1  ·  Technical handoff  ·  2026-11-04</text>
+</svg>

@@ -343,6 +343,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
 
             // Category Dropdown
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _selectedCategory,
               decoration: _inputDecoration(
                 label: 'Санаты (Жанры) *',
@@ -787,12 +788,14 @@ class _BookFormScreenState extends State<BookFormScreen> {
       children: [
         Icon(icon, size: 18, color: AppColors.primary),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ],

@@ -1,131 +1,126 @@
-# 📚 LibFlow — Онлайн кітапхана және электронды кітаптар мобильді қосымшасы
+# LibFlow — Flutter кітапхана қосымшасы
 
-## REST API + PostgreSQL
+Кітаптарды іздеу, каталог CRUD, локалды аккаунт, бронь QR-ын тексеру және
+realtime каталог жаңартуы бір Flutter жобасына біріктірілген.
+Нұсқа: **1.0.0+1**. Соңғы тапсыру құжаттары: [docs/final](docs/final/DELIVERY_README.md).
 
-Жобаға FastAPI сервері және PostgreSQL базасы қосылды. Flutter каталогы
-GET/POST/PUT/DELETE арқылы сервермен жұмыс істейді, офлайн кэш және
-Loading/Success/Error күйлері бар.
+Финалдық тексеру: **62 Unit/Widget**, **18 backend**, **1 Android integration**
+сценарийі өтті. Қадам/expected/actual көрсетілген **31 Test Case** бар.
 
-**[Іске қосу, endpoint тізімі және 20 талаптың орындалуы → docs/REST_API.md](docs/REST_API.md)**
+## Мүмкіндіктері
 
-Серверді жоба түбірінен іске қосу:
+- Registration/Login/Logout, қауіпсіз локалды сақтау және 30 күндік сессия.
+- Home, Catalog, My Books, Profile; detail, form, reader, card, notifications, scanner маршруттары.
+- PostgreSQL/FastAPI каталог CRUD, JSON файлындағы тұрақты офлайн кэш.
+- WebSocket change events, heartbeat, автоматты retry/resync, Offline/Error мәтіндері.
+- Камера permission және QR арқылы жергілікті белсенді броньды тексеру.
+- Іздеу/сүзгі/сұрыптау, таңдаулылар, оқу мәтіні және түнгі тақырып.
+- Google Books/Open Library іздеу интеграциясы.
+
+Авторизация құрылғыда орындалады; backend API-де login/token/RBAC жоқ.
+Кэш аккаунттарға ортақ. Аудио панелі — UI прототипі, нақты playback жоқ;
+пікірлер экран жадында сақталады. Хабарламалар — жергілікті loan/reservation
+ескертулері; ОС push қызметі қосылмаған. Бұл оқу/демо жобасы.
+
+## Құрылымы
+
+```text
+lib/models/              Book және байланысты модельдер
+lib/screens/             Экрандар мен маршруттар
+lib/services/            Auth, REST, repository, JSON cache, WebSocket, scanner, log
+lib/widgets/             Қайта пайдаланылатын UI
+backend/                 FastAPI + PostgreSQL + WebSocket, тесттер
+test/                    Unit және Widget тесттер
+integration_test/        Android құрылғысындағы end-to-end smoke
+scripts/                 Тексеру, диаграмма, есеп және пакет жинау
+docs/final/              Архитектура, нұсқаулық, Test Report, Bug Report
+```
+
+## Қажетті орта
+
+Flutter SDK (Dart **^3.13.2**, нақты SDK нұсқасы evidence/environment.log ішінде),
+Android SDK/platform-tools, Java/Gradle, Python 3.13 және PostgreSQL.
+Windows-та desktop plugin symlink үшін Developer Mode қажет болуы мүмкін.
+Ол параметр автоматты өзгертілмейді. Android эмуляторын іске қосар алдында
+жеткілікті RAM/commit memory барын тексеріңіз.
 
 ```powershell
+flutter --version
+flutter doctor -v
+flutter devices
+flutter emulators
+flutter pub get
+```
+
+## Серверді іске қосу
+
+```powershell
+python -m venv backend/.venv
+python -m pip --python backend/.venv/Scripts/python.exe install -r backend/requirements-dev.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File backend/start.ps1
 ```
 
-API құжаттамасы: [Swagger UI](http://127.0.0.1:8000/docs).
+Бар `.venv` ортасын қайта құру қажет емес. start.ps1 PostgreSQL 18-ді
+`C:\Program Files\PostgreSQL\18\bin` ішінен іздейді; басқа жол үшін
+`-PostgresBin` беріңіз. Скрипт осы жобаның жеке кластерін және базасын қолданады;
+құпия URL ignored `backend/.env` ішінде сақталады.
 
-**LibFlow** — заманауи кітапхана қызметтерін цифрландыруға, оқырмандардың қажетті кітаптарды жылдам табуына, брондауына, электронды түрде оқуына және аудиокітаптарды тыңдауына арналған Flutter мобильді қосымшасы.
+Бар серверді қолдансаңыз, `.env.example` негізінде `DATABASE_URL` орнатыңыз:
 
----
-
-## 🌟 Негізгі мүмкіндіктері
-
-- **🎨 Splash Screen & Брендтік интерфейс:** Біркелкі анимациялармен ашылатын, алтын шапақты және қою жасыл (Emerald / Deep Forest) түстер палитрасындағы ресми сәлемдесу экраны.
-- **🔐 Авторизация және Тіркелу (Auth Screen):** 
-  - Пайдаланушының жүйеге кіруі және жаңа оқырман ретінде тіркелуі.
-  - Деректердің дұрыстығын тексеретін validation жүйесі (Email, құпиясөз, бос өрістерді бақылау).
-- **🏠 Басты экран (Home Screen):** 
-  - Пайдаланушының ағымдағы оқу прогресі (Reading Goals).
-  - Ұсынылатын және трендтегі жаңа кітаптар таңдауы.
-  - Жылдам өту батырмалары мен интерактивті статистика.
-- **📖 Каталог және Сүзгілер (Catalog Screen):**
-  - Жергілікті қордан және онлайн API-дан (Google Books & Open Library) нақты уақытта кітап іздеу.
-  - Жанрлар (Классика, Роман, Тарих, Психология т.б.) бойынша санаттау.
-  - Қолжетімділік, Audio және e-Book бойынша фильтрлер.
-- **📝 Кітап қосу және өңдеу (Create / Edit Book):**
-  - Каталогқа жаңа кітап енгізу немесе бұрынғы кітаптың деректерін өңдеу формасы.
-  - ISBN, бет саны, шыққан жылы, дана саны, аннотациясы және мұқабасын баптау.
-  - Қателерді алдын ала ескертетін қатаң тексерулер (Form Validation).
-- **🔎 Кітаптың толық мәліметі (Book Detail Screen):**
-  - Кітаптың толық аннотациясы, авторы, рейтингі, пікірлері.
-  - **Кітапты брондау (Reserve):** QR-код пен бірегей бронь кодын генерациялау.
-  - Пікір мен 5 жұлдызды бағалау қалдыру.
-- **📱 e-Reader және Аудио ойнатқыш (Audio Player):**
-  - Электронды мәтінді экран өлшеміне бейімдеп оқу.
-  - Аудиокітапты тоқтату/қосу және ұзақтығын бақылау мүмкіндігі бар плеер.
-- **❤️ Таңдаулылар мен Менің кітаптарым (My Books Screen):**
-  - Брондалған кітаптар мен оқырман билетіне алынған кітаптар тізімі.
-  - Қайтару мерзімі (дедлайн) және оқу күйі.
-- **👤 Профиль және Баптаулар (Profile Screen):**
-  - Сандық оқырман билеті (Digital Library Card & QR).
-  - Жарық (Light) және Қараңғы (Dark) тақырыптарын ауыстыру (ThemeMode).
-  - Хабарландыруларды басқару және жүйеден шығу.
-
----
-
-## 🛠 Технологиялық стек
-
-- **Фреймворк:** [Flutter](https://flutter.dev/) (v3.x / Dart)
-- **UI & Архитектура:** Material Design 3, Reusable Widgets жүйесі, адаптивті өлшемдер
-- **Деректер көздері:**
-  - LibFlow Dummy Service (офлайн/жергілікті деректер)
-  - [Google Books API](https://developers.google.com/books)
-  - [Open Library API](https://openlibrary.org/developers/api)
-- **Тексерулер мен сапа:** `flutter analyze` 100% таза (0 errors, 0 warnings).
-
----
-
-## 📂 Жобаның құрылымы (`lib/`)
-
-```text
-lib/
-├── main.dart                  # Қосымшаның кіру нүктесі, Theme баптаулары мен навигация
-├── models/
-│   └── book_model.dart        # Кітап пен пікірлердің деректер моделі
-├── screens/
-│   ├── splash_screen.dart     # Қосымшаның кіріспе Splash экраны
-│   ├── auth_screen.dart       # Кіру және тіркелу экраны
-│   ├── home_screen.dart       # Басты ақпараттық экран
-│   ├── catalog_screen.dart    # Сүзгілері бар толық кітап каталогы
-│   ├── book_form_screen.dart  # Кітап қосу/өңдеу формасы (Create/Edit)
-│   ├── book_detail_screen.dart# Кітап туралы толық мәлімет және брондау
-│   ├── ereader_screen.dart    # Электронды кітап оқу экраны
-│   ├── my_books_screen.dart   # Оқырманның сақталған/алынған кітаптары
-│   ├── library_card_screen.dart # QR оқырман билеті экраны
-│   ├── notifications_screen.dart# Дедлайн ескертулері
-│   └── profile_screen.dart    # Жеке кабинет, статистика және баптаулар
-├── services/
-│   ├── books_api_service.dart # Google Books & Open Library интеграциясы
-│   └── dummy_books.dart       # Бастапқы кітапханалық деректер қоры
-├── utils/
-│   └── constants.dart         # Жүйелік тұрақтылар, түстер палитрасы
-└── widgets/
-    ├── audio_player_sheet.dart# Төменнен ашылатын аудиоплеер
-    ├── book_card.dart         # Қайта қолданылатын кітап карточкасы
-    └── qr_widget.dart         # QR-код генераторы виджеті
+```powershell
+backend/.venv/Scripts/python.exe -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
 
----
+Диагностика: [Health](http://127.0.0.1:8000/health),
+[Swagger](http://127.0.0.1:8000/docs). Сервер бір worker арқылы жұмыс істейді.
+Docker баламасы: `docker compose up --build -d`.
 
-## 🚀 Жобаны іске қосу нұсқаулығы
+## Терминалдан іске қосу және APK
 
-1. **Репозиторийді көшіріп алыңыз (clone):**
-   ```bash
-   git clone https://github.com/YerA-KAZ/LibFlow.git
-   cd LibFlow
-   ```
+```powershell
+flutter emulators --launch Pixel_7
+flutter devices
+flutter run -d emulator-5554
+flutter build apk --debug
+```
 
-2. **Тәуелділіктерді орнатыңыз:**
-   ```bash
-   flutter pub get
-   ```
+Әдепкі API: Android-та `http://10.0.2.2:8000`, desktop-та `http://127.0.0.1:8000`.
+Нақты телефон үшін компьютердің жергілікті IP мекенжайын беріңіз:
 
-3. **Код сапасын тексеріңіз:**
-   ```bash
-   flutter analyze
-   ```
+```powershell
+flutter run -d DEVICE_ID --dart-define=API_BASE_URL=http://192.168.1.10:8000
+flutter build apk --debug --dart-define=API_BASE_URL=http://192.168.1.10:8000
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+adb shell am start -n com.libflow.libflow/.MainActivity
+adb logcat -s flutter AndroidRuntime
+```
 
-4. **Қосымшаны құрылғыда немесе эмуляторда іске қосыңыз:**
-   ```bash
-   flutter run
-   ```
+IP-ді өз желіңізге сәйкестендіріңіз. WebSocket URL осы API URL-дан жасалады.
+APK: `build/app/outputs/flutter-apk/app-debug.apk`. Бұл debug APK оқу және демонстрация үшін жасалады; дүкенге жариялауға жеке signing қажет.
+Тәуелділіктер бұрын шешілген болса, командаларға `--no-pub` қосуға болады.
 
----
+## Тексеру және тапсыру
 
-## 👨‍💻 Авторы
+```powershell
+flutter analyze --no-pub
+flutter test --no-pub --reporter expanded
+backend/.venv/Scripts/python.exe -m pytest backend -q --tb=short
+flutter test --no-pub integration_test/app_smoke_test.dart -d emulator-5554
+```
 
-- **Әзірлеуші:** YerA-KAZ
-- **Жоба:** LibFlow — Smart Library Solution
-- **Жылы:** 2026
+Қадамдар/expected/actual: [Test Report](docs/final/TEST_REPORT.md).
+Қайталау қадамдары мен түзетулер: [Bug Report](docs/final/BUG_REPORT.md).
+Пайдалану: [User Guide](docs/final/USER_GUIDE.md).
+[Архитектура](docs/final/ARCHITECTURE.md), [PNG диаграмма](docs/final/architecture.png).
+
+```powershell
+powershell -File scripts/verify.ps1 -SkipPubGet -DeviceId emulator-5554
+python scripts/package_final.py
+```
+
+Тапсыру папкасы: `delivery/LibFlow_Final_2026-11-04/`.
+Оның ішінде APK, source, source ZIP, құжаттар, терминал дәлелдері және SHA-256 manifest бар.
+Құпия файлдар мен build кэштері пакетке кірмейді. Презентация мен видеоны
+пайдаланушы өзі жасайды.
+
+Әзірлеуші: YerA-KAZ. Жоба: LibFlow — Smart Library Solution, 2026.

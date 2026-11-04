@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
 import '../utils/constants.dart';
 import 'book_detail_screen.dart';
@@ -8,6 +9,7 @@ class HomeScreen extends StatelessWidget {
   final Future<bool> Function(Book) onBookUpdated;
   final VoidCallback onNavigateToCatalog;
   final VoidCallback onNavigateToMyBooks;
+  final String readerName;
 
   const HomeScreen({
     super.key,
@@ -15,6 +17,7 @@ class HomeScreen extends StatelessWidget {
     required this.onBookUpdated,
     required this.onNavigateToCatalog,
     required this.onNavigateToMyBooks,
+    this.readerName = 'Оқырман',
   });
 
   @override
@@ -30,7 +33,9 @@ class HomeScreen extends StatelessWidget {
         : null;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -38,11 +43,13 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Сәлем, Айша!',
+              'Сәлем, ${readerName.trim().isEmpty ? 'Оқырман' : readerName.trim().split(' ').first}!',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                color: isDark
+                    ? AppColors.textPrimaryDark
+                    : AppColors.textPrimaryLight,
                 fontFamily: 'serif',
               ),
             ),
@@ -51,7 +58,9 @@ class HomeScreen extends StatelessWidget {
               'Бүгін қандай кітап оқимыз?',
               style: TextStyle(
                 fontSize: 13,
-                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                color: isDark
+                    ? AppColors.textSecondaryDark
+                    : AppColors.textSecondaryLight,
               ),
             ),
           ],
@@ -62,9 +71,13 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.only(right: 16),
             child: CircleAvatar(
               radius: 19,
-              backgroundColor: isDark ? AppColors.surfaceDark : const Color(0xFFE5EDE8),
-              child: const Text(
-                'A',
+              backgroundColor: isDark
+                  ? AppColors.surfaceDark
+                  : const Color(0xFFE5EDE8),
+              child: Text(
+                readerName.trim().isEmpty
+                    ? '?'
+                    : readerName.trim().characters.first,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -85,22 +98,33 @@ class HomeScreen extends StatelessWidget {
               onTap: onNavigateToCatalog,
               child: Container(
                 margin: const EdgeInsets.only(top: 8, bottom: 20),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.surfaceDark : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                    color: isDark
+                        ? AppColors.borderDark
+                        : AppColors.borderLight,
                   ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.search_rounded, color: AppColors.textSecondaryLight, size: 20),
+                    const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.textSecondaryLight,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       'Кітаптарды іздеу',
                       style: TextStyle(
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                        color: isDark
+                            ? AppColors.textSecondaryDark
+                            : AppColors.textSecondaryLight,
                         fontSize: 14,
                       ),
                     ),
@@ -111,7 +135,7 @@ class HomeScreen extends StatelessWidget {
 
             // Figma Hero Promo Banner: "АПТАНЫҢ ТАҢДАУЫ: Шабыт сыйлар кітаптар"
             Container(
-              height: 140,
+              constraints: const BoxConstraints(minHeight: 160),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               decoration: BoxDecoration(
                 color: AppColors.primary,
@@ -132,7 +156,10 @@ class HomeScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withAlpha(30),
                             borderRadius: BorderRadius.circular(6),
@@ -184,7 +211,8 @@ class HomeScreen extends StatelessWidget {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: (books.isNotEmpty &&
+                        child:
+                            (books.isNotEmpty &&
                                 books.first.coverUrl != null &&
                                 books.first.coverUrl!.trim().isNotEmpty)
                             ? Image.network(
@@ -198,7 +226,10 @@ class HomeScreen extends StatelessWidget {
                                       height: 32,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        border: Border.all(color: const Color(0xFFD4A373), width: 3),
+                                        border: Border.all(
+                                          color: const Color(0xFFD4A373),
+                                          width: 3,
+                                        ),
                                       ),
                                     ),
                                     const Positioned(
@@ -206,7 +237,11 @@ class HomeScreen extends StatelessWidget {
                                       child: Text(
                                         'Абай\nжолы',
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -220,7 +255,10 @@ class HomeScreen extends StatelessWidget {
                                     height: 32,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: const Color(0xFFD4A373), width: 3),
+                                      border: Border.all(
+                                        color: const Color(0xFFD4A373),
+                                        width: 3,
+                                      ),
                                     ),
                                   ),
                                   const Positioned(
@@ -228,7 +266,11 @@ class HomeScreen extends StatelessWidget {
                                     child: Text(
                                       'Абай\nжолы',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -242,15 +284,20 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // Section: Оқуды жалғастыру (Continue reading)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   'Оқуды жалғастыру',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
                   ),
                 ),
                 GestureDetector(
@@ -259,10 +306,18 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       Text(
                         'Барлығы',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryLight),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryLight,
+                        ),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primaryLight),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: AppColors.primaryLight,
+                      ),
                     ],
                   ),
                 ),
@@ -290,7 +345,9 @@ class HomeScreen extends StatelessWidget {
                     color: isDark ? AppColors.surfaceDark : Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                      color: isDark
+                          ? AppColors.borderDark
+                          : AppColors.borderLight,
                     ),
                   ),
                   child: Row(
@@ -309,19 +366,26 @@ class HomeScreen extends StatelessWidget {
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: (readingBook.coverUrl != null &&
+                          child:
+                              (readingBook.coverUrl != null &&
                                   readingBook.coverUrl!.trim().isNotEmpty)
                               ? Image.network(
                                   readingBook.coverUrl!.trim(),
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => const Center(
-                                    child: Icon(Icons.auto_stories,
-                                        color: Colors.white70, size: 22),
+                                    child: Icon(
+                                      Icons.auto_stories,
+                                      color: Colors.white70,
+                                      size: 22,
+                                    ),
                                   ),
                                 )
                               : const Center(
-                                  child: Icon(Icons.auto_stories,
-                                      color: Colors.white70, size: 22),
+                                  child: Icon(
+                                    Icons.auto_stories,
+                                    color: Colors.white70,
+                                    size: 22,
+                                  ),
                                 ),
                         ),
                       ),
@@ -332,14 +396,19 @@ class HomeScreen extends StatelessWidget {
                           children: [
                             Text(
                               readingBook.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '45 / 190 бет • 24%',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                color: isDark
+                                    ? AppColors.textSecondaryDark
+                                    : AppColors.textSecondaryLight,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -348,8 +417,12 @@ class HomeScreen extends StatelessWidget {
                               child: LinearProgressIndicator(
                                 value: 0.24,
                                 minHeight: 5,
-                                backgroundColor: isDark ? Colors.white12 : const Color(0xFFE5EDE8),
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                backgroundColor: isDark
+                                    ? Colors.white12
+                                    : const Color(0xFFE5EDE8),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppColors.primary,
+                                ),
                               ),
                             ),
                           ],
@@ -362,15 +435,20 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // Section: Сізге ұсынылады (Recommended for you)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   'Сізге ұсынылады',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
                   ),
                 ),
                 GestureDetector(
@@ -379,10 +457,18 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       Text(
                         'Қарау',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryLight),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryLight,
+                        ),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primaryLight),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: AppColors.primaryLight,
+                      ),
                     ],
                   ),
                 ),
@@ -401,8 +487,19 @@ class HomeScreen extends StatelessWidget {
                     coverColor: const Color(0xFF1E3347),
                     isDark: isDark,
                     onTap: () {
-                      final b = books.firstWhere((b) => b.title.contains('Көшпенділер'), orElse: () => books[1]);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => BookDetailScreen(book: b, onBookUpdated: onBookUpdated)));
+                      final b = books.firstWhere(
+                        (b) => b.title.contains('Көшпенділер'),
+                        orElse: () => books[1],
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookDetailScreen(
+                            book: b,
+                            onBookUpdated: onBookUpdated,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -415,8 +512,19 @@ class HomeScreen extends StatelessWidget {
                     coverColor: const Color(0xFF282B30),
                     isDark: isDark,
                     onTap: () {
-                      final b = books.firstWhere((b) => b.title.contains('Қан мен тер'), orElse: () => books[2]);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => BookDetailScreen(book: b, onBookUpdated: onBookUpdated)));
+                      final b = books.firstWhere(
+                        (b) => b.title.contains('Қан мен тер'),
+                        orElse: () => books[2],
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookDetailScreen(
+                            book: b,
+                            onBookUpdated: onBookUpdated,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -467,7 +575,10 @@ class HomeScreen extends StatelessWidget {
                     height: 40,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD4A373), width: 3),
+                      border: Border.all(
+                        color: const Color(0xFFD4A373),
+                        width: 3,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -498,17 +609,26 @@ class HomeScreen extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
-                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                color: isDark
+                    ? AppColors.textSecondaryDark
+                    : AppColors.textSecondaryLight,
               ),
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD4A373)),
+                const Icon(
+                  Icons.star_rounded,
+                  size: 14,
+                  color: Color(0xFFD4A373),
+                ),
                 const SizedBox(width: 3),
                 Text(
                   rating,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),

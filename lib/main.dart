@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'models/book_model.dart';
 import 'screens/auth_screen.dart';
+
+import 'package:provider/provider.dart';
+
+import 'services/auth_provider.dart';
 import 'screens/catalog_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_books_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
-import 'services/dummy_books.dart';
 import 'services/library_database_service.dart';
 import 'services/library_repository.dart';
 import 'utils/constants.dart';
+import 'widgets/connection_banner.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Практикалық жұмыс №4: Деректер қорын қосымша басталар алдында инициализациялау
   await LibraryDatabaseService().initializeDatabase();
@@ -37,47 +41,61 @@ class _LibFlowAppState extends State<LibFlowApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      themeMode: _themeMode,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
+    return ChangeNotifierProvider(
+      create: (_) => AuthProvider()..restore(),
+      child: MaterialApp(
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
+        themeMode: _themeMode,
+        theme: ThemeData(
+          useMaterial3: true,
           brightness: Brightness.light,
-          primary: AppColors.primary,
-          secondary: AppColors.accent,
-          surface: AppColors.surfaceLight,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: AppColors.primary,
+            brightness: Brightness.light,
+            primary: AppColors.primary,
+            secondary: AppColors.accent,
+            surface: AppColors.surfaceLight,
+          ),
+          scaffoldBackgroundColor: AppColors.backgroundLight,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: AppColors.backgroundLight,
+            foregroundColor: AppColors.textPrimaryLight,
+            elevation: 0,
+          ),
         ),
-        scaffoldBackgroundColor: AppColors.backgroundLight,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.backgroundLight,
-          foregroundColor: AppColors.textPrimaryLight,
-          elevation: 0,
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
+        darkTheme: ThemeData(
+          useMaterial3: true,
           brightness: Brightness.dark,
-          primary: AppColors.primaryLight,
-          secondary: AppColors.accent,
-          surface: AppColors.surfaceDark,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: AppColors.primary,
+            brightness: Brightness.dark,
+            primary: AppColors.primaryLight,
+            secondary: AppColors.accent,
+            surface: AppColors.surfaceDark,
+          ),
+          scaffoldBackgroundColor: AppColors.backgroundDark,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: AppColors.backgroundDark,
+            foregroundColor: AppColors.textPrimaryDark,
+            elevation: 0,
+          ),
         ),
-        scaffoldBackgroundColor: AppColors.backgroundDark,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.backgroundDark,
-          foregroundColor: AppColors.textPrimaryDark,
-          elevation: 0,
+        home: Consumer<AuthProvider>(
+          builder: (context, auth, _) {
+            if (!auth.initialized) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (!auth.authenticated) return AuthScreen(onLoginSuccess: () {});
+            return MainNavigationContainer(
+              key: ValueKey(auth.user!['email']),
+              isDarkMode: _themeMode == ThemeMode.dark,
+              onThemeToggle: _toggleTheme,
+            );
+          },
         ),
-      ),
-      home: MainNavigationContainer(
-        isDarkMode: _themeMode == ThemeMode.dark,
-        onThemeToggle: _toggleTheme,
       ),
     );
   }
@@ -100,21 +118,23 @@ class MainNavigationContainer extends StatefulWidget {
       _MainNavigationContainerState();
 }
 
-class _MainNavigationContainerState extends State<MainNavigationContainer> {
+class _MainNavigationContainerState extends State<MainNavigationContainer>
+    with WidgetsBindingObserver {
   bool _showSplash = true;
-  bool _isAuthenticated =
-      true; // Set to true by default for immediate prototype viewing
   int _currentIndex = 0;
-  List<Book> _books = DummyDataService.getInitialBooks();
+  int _myBooksTabIndex = 0;
+  List<Book> _books = [];
   late final LibraryRepository _repository;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _repository = widget.repository ?? LibraryRepository();
     _repository.addListener(_repositoryChanged);
-    _loadBooksFromDatabase();
+    _books = _repository.books;
     _repository.refresh();
+    if (widget.repository == null) _repository.startRealtime();
   }
 
   void _repositoryChanged() {
@@ -123,15 +143,15 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _repository.removeListener(_repositoryChanged);
     if (widget.repository == null) _repository.dispose();
     super.dispose();
   }
 
-  void _loadBooksFromDatabase() {
-    setState(() {
-      _books = _repository.books;
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _repository.retryRealtime();
   }
 
   Future<bool> _handleBookUpdate(Book book) => _repository.update(book);
@@ -139,6 +159,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   Future<bool> _handleBookAdd(Book book) => _repository.add(book);
 
   Future<bool> _handleBookDelete(String id) => _repository.delete(id);
+
+  void _openMyBooks(int tab) => setState(() {
+    _myBooksTabIndex = tab;
+    _currentIndex = 2;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -152,22 +177,14 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       );
     }
 
-    if (!_isAuthenticated) {
-      return AuthScreen(
-        onLoginSuccess: () {
-          setState(() {
-            _isAuthenticated = true;
-          });
-        },
-      );
-    }
-
     final screens = [
       HomeScreen(
+        readerName:
+            context.watch<AuthProvider>().user?['name'] as String? ?? 'Оқырман',
         books: _books,
         onBookUpdated: _handleBookUpdate,
         onNavigateToCatalog: () => setState(() => _currentIndex = 1),
-        onNavigateToMyBooks: () => setState(() => _currentIndex = 2),
+        onNavigateToMyBooks: () => _openMyBooks(0),
       ),
       CatalogScreen(
         books: _books,
@@ -175,14 +192,23 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         onBookAdded: _handleBookAdd,
         onBookDeleted: _handleBookDelete,
       ),
-      MyBooksScreen(books: _books, onBookUpdated: _handleBookUpdate),
+      MyBooksScreen(
+        books: _books,
+        onBookUpdated: _handleBookUpdate,
+        initialTabIndex: _myBooksTabIndex,
+      ),
       ProfileScreen(
+        onNavigateToFavorites: () => _openMyBooks(2),
+        onNavigateToMyBooks: () => _openMyBooks(0),
         isDarkMode: widget.isDarkMode,
         onThemeToggle: widget.onThemeToggle,
-        onLogout: () {
-          setState(() {
-            _isAuthenticated = false;
-          });
+        onLogout: () async {
+          final auth = context.read<AuthProvider>();
+          await auth.logout();
+          if (context.mounted && auth.error != null) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(auth.error!)));
+          }
         },
       ),
     ];
@@ -190,39 +216,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     return Scaffold(
       body: Column(
         children: [
-          SafeArea(
-            bottom: false,
-            child: Row(
-              children: [
-                const SizedBox(width: 12),
-                Icon(
-                  _repository.status == LibraryStatus.error
-                      ? Icons.cloud_off
-                      : Icons.cloud_done,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _repository.status == LibraryStatus.loading
-                        ? 'Сервермен байланысуда…'
-                        : _repository.error ??
-                              (_repository.status == LibraryStatus.success
-                                  ? 'Сервермен жаңартылды'
-                                  : 'Жергілікті деректер'),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Серверден жаңарту',
-                  onPressed: _repository.status == LibraryStatus.loading
-                      ? null
-                      : () => _repository.refresh(),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
+          ConnectionBanner(repository: _repository),
           if (_repository.status == LibraryStatus.loading)
             const LinearProgressIndicator(),
           Expanded(

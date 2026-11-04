@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../services/auth_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/qr_widget.dart';
 
@@ -7,12 +10,15 @@ class LibraryCardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Электронды оқырман билеті',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Электронды оқырман билеті',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -46,10 +52,15 @@ class LibraryCardScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Card Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -57,8 +68,11 @@ class LibraryCardScreen extends StatelessWidget {
                               color: Colors.white.withAlpha(40),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.account_balance_rounded,
-                                color: Colors.white, size: 24),
+                            child: const Icon(
+                              Icons.account_balance_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           const Column(
@@ -86,7 +100,9 @@ class LibraryCardScreen extends StatelessWidget {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.accent,
                           borderRadius: BorderRadius.circular(12),
@@ -110,8 +126,8 @@ class LibraryCardScreen extends StatelessWidget {
                     style: TextStyle(color: Colors.white60, fontSize: 11),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Ернұр Асқаров',
+                  Text(
+                    user?['name'] as String? ?? '',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -121,20 +137,24 @@ class LibraryCardScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
                             'Оқырман ID:',
-                            style:
-                                TextStyle(color: Colors.white60, fontSize: 11),
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '#LF-2024-84920',
+                            user?['ticket'] as String? ?? '',
                             style: TextStyle(
                               color: Colors.amber[200],
                               fontFamily: 'monospace',
@@ -148,13 +168,15 @@ class LibraryCardScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            'Мерзімі:',
-                            style:
-                                TextStyle(color: Colors.white60, fontSize: 11),
+                            'Күйі:',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
                           ),
                           SizedBox(height: 2),
                           Text(
-                            '01.07.2025 дейін',
+                            'Белсенді аккаунт',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -189,10 +211,16 @@ class LibraryCardScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  const Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.qr_code_scanner, color: AppColors.primaryLight),
+                      Icon(
+                        Icons.qr_code_scanner,
+                        color: AppColors.primaryLight,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Кітапхана терминалына жақындатыңыз',
@@ -204,14 +232,14 @@ class LibraryCardScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  const CustomQrView(
-                    data: 'LIBFLOW-READER-84920-ERNUR-ASKAROV',
+                  CustomQrView(
+                    data: user?['ticket'] as String? ?? '',
                     size: 200,
                   ),
                   const SizedBox(height: 20),
                   const Divider(),
                   const SizedBox(height: 12),
-                  const BarcodeView(code: '8492 0184 9201'),
+                  BarcodeView(code: user?['ticket'] as String? ?? ''),
                   const SizedBox(height: 12),
                   Text(
                     'Кітапты алу, қайтару және оқу залына кіру үшін жарамды',
@@ -241,7 +269,7 @@ class LibraryCardScreen extends StatelessWidget {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Бұл карта кітапхананың барлық бөлімдерінде және серіктес онлайн желілерінде қабылданады.',
+                      'Бұл — сандық оқырман билеті. Броньды тексеру үшін профильдегі QR сканерін пайдаланыңыз.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),

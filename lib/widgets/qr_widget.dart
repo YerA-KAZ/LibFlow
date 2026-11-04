@@ -1,4 +1,6 @@
 import 'dart:math';
+
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter/material.dart';
 
 class CustomQrView extends StatelessWidget {
@@ -32,116 +34,17 @@ class CustomQrView extends StatelessWidget {
           ),
         ],
       ),
-      child: CustomPaint(
-        painter: _QrPainter(data: data, color: darkColor),
+      child: QrImageView(
+        data: data,
+        backgroundColor: lightColor,
+        eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: darkColor),
+        dataModuleStyle: QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: darkColor,
+        ),
       ),
     );
   }
-}
-
-class _QrPainter extends CustomPainter {
-  final String data;
-  final Color color;
-
-  _QrPainter({required this.data, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    const int matrixSize = 25;
-    final double cellSize = size.width / matrixSize;
-
-    // Generate pseudo-random matrix based on data hash
-    final int seed = data.hashCode.abs();
-    final random = Random(seed);
-
-    // Draw finder patterns (top-left, top-right, bottom-left)
-    void drawFinderPattern(int startRow, int startCol) {
-      // 7x7 outer square
-      for (int r = 0; r < 7; r++) {
-        for (int c = 0; c < 7; c++) {
-          if (r == 0 || r == 6 || c == 0 || c == 6) {
-            canvas.drawRRect(
-              RRect.fromRectAndRadius(
-                Rect.fromLTWH(
-                  (startCol + c) * cellSize,
-                  (startRow + r) * cellSize,
-                  cellSize,
-                  cellSize,
-                ),
-                Radius.circular(cellSize * 0.2),
-              ),
-              paint,
-            );
-          } else if (r >= 2 && r <= 4 && c >= 2 && c <= 4) {
-            // 3x3 inner square
-            canvas.drawRRect(
-              RRect.fromRectAndRadius(
-                Rect.fromLTWH(
-                  (startCol + c) * cellSize,
-                  (startRow + r) * cellSize,
-                  cellSize,
-                  cellSize,
-                ),
-                Radius.circular(cellSize * 0.2),
-              ),
-              paint,
-            );
-          }
-        }
-      }
-    }
-
-    drawFinderPattern(0, 0);
-    drawFinderPattern(0, matrixSize - 7);
-    drawFinderPattern(matrixSize - 7, 0);
-
-    // Draw timing patterns
-    for (int i = 8; i < matrixSize - 8; i++) {
-      if (i % 2 == 0) {
-        canvas.drawRect(
-          Rect.fromLTWH(6 * cellSize, i * cellSize, cellSize, cellSize),
-          paint,
-        );
-        canvas.drawRect(
-          Rect.fromLTWH(i * cellSize, 6 * cellSize, cellSize, cellSize),
-          paint,
-        );
-      }
-    }
-
-    // Fill data grid
-    for (int r = 0; r < matrixSize; r++) {
-      for (int c = 0; c < matrixSize; c++) {
-        final bool inTopLeft = r < 8 && c < 8;
-        final bool inTopRight = r < 8 && c >= matrixSize - 8;
-        final bool inBottomLeft = r >= matrixSize - 8 && c < 8;
-
-        if (!inTopLeft && !inTopRight && !inBottomLeft) {
-          if (random.nextDouble() > 0.45) {
-            canvas.drawRRect(
-              RRect.fromRectAndRadius(
-                Rect.fromLTWH(
-                  c * cellSize + (cellSize * 0.08),
-                  r * cellSize + (cellSize * 0.08),
-                  cellSize * 0.84,
-                  cellSize * 0.84,
-                ),
-                Radius.circular(cellSize * 0.25),
-              ),
-              paint,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class BarcodeView extends StatelessWidget {

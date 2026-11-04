@@ -1,4 +1,8 @@
 import 'dart:async';
+
+import 'package:provider/provider.dart';
+import 'package:libflow/services/auth_provider.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,7 +18,10 @@ import 'package:libflow/services/library_database_service.dart';
 import 'package:libflow/services/library_repository.dart';
 
 http.Response jsonResponse(String body, int status) => http.Response(
-  body, status, headers: {'content-type': 'application/json; charset=utf-8'});
+  body,
+  status,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -52,16 +59,21 @@ void main() {
       ),
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: MainNavigationContainer(
-          isDarkMode: false,
-          onThemeToggle: (_) {},
-          repository: repo,
+      ChangeNotifierProvider(
+        create: (_) => AuthProvider(),
+        child: MaterialApp(
+          home: MainNavigationContainer(
+            isDarkMode: false,
+            onThemeToggle: (_) {},
+            repository: repo,
+          ),
         ),
       ),
     );
     for (var i = 0; i < 20 && repo.status == LibraryStatus.loading; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
       await tester.pump();
     }
     await tester.pump(const Duration(seconds: 3));

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,8 +10,13 @@ import 'package:libflow/services/library_api_service.dart';
 import 'package:libflow/services/library_database_service.dart';
 import 'package:libflow/services/library_repository.dart';
 
+import 'library_realtime_test.dart' show until;
+
 http.Response jsonResponse(String body, int status) => http.Response(
-  body, status, headers: {'content-type': 'application/json; charset=utf-8'});
+  body,
+  status,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +32,114 @@ void main() {
     LibraryDatabaseService.storageDirectoryOverride = null;
     await directory.delete(recursive: true);
   });
+
+  test('Realtime event during REST loading schedules a fresh GET', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final sockets = <WebSocket>[];
+    var syncReceived = false;
+    server.listen((request) async {
+      final socket = await WebSocketTransformer.upgrade(request);
+      sockets.add(socket);
+      socket.listen((_) {
+        syncReceived = true;
+        socket.add(jsonEncode({'type': 'catalogue_changed'}));
+      });
+    });
+    final gate = Completer<void>();
+    var gets = 0;
+    final repository = LibraryRepository(
+      cache: cache,
+      api: LibraryApiService(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+        client: MockClient((_) async {
+          gets++;
+          if (gets == 1) await gate.future;
+          return jsonResponse(
+            jsonEncode([
+              {'id': 'live', 'title': gets == 1 ? 'Stale' : 'Live title'},
+            ]),
+            200,
+          );
+        }),
+      ),
+    );
+    try {
+      await cache.replaceBooks([
+        Book.fromMap({
+          'id': 'live',
+          'isFavorite': 1,
+          'reservationCode': 'PRIVATE',
+        }),
+      ]);
+      final initial = repository.refresh();
+      repository.startRealtime();
+      await until(() => syncReceived);
+      // Wait until the event has reached the client before completing GET.
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      gate.complete();
+      await initial;
+      await until(
+        () => gets == 2 && repository.status == LibraryStatus.success,
+      );
+      expect(repository.books.single.title, 'Live title');
+      expect(repository.books.single.isFavorite, isTrue);
+      expect(repository.books.single.reservationCode, 'PRIVATE');
+      expect(gets, 2);
+    } finally {
+      if (!gate.isCompleted) gate.complete();
+      repository.dispose();
+      for (final socket in sockets) {
+        await socket.close();
+      }
+      await server.close(force: true);
+    }
+  });
+
+  test('Disposed repository rejects further operations', () async {
+    var requests = 0;
+    final repository = LibraryRepository(
+      api: LibraryApiService(
+        client: MockClient((_) async {
+          requests++;
+          return jsonResponse('[]', 200);
+        }),
+      ),
+    );
+    repository.dispose();
+    expect(await repository.refresh(), isFalse);
+    expect(requests, 0);
+  });
+
+  test(
+    'Cache write failure is surfaced instead of reporting success',
+    () async {
+      final blocker = File('${directory.path}/not_a_directory');
+      await blocker.writeAsString('blocked');
+      final repository = LibraryRepository(
+        api: LibraryApiService(
+          client: MockClient(
+            (request) async => jsonResponse(
+              request.method == 'GET' ? '[]' : request.body,
+              200,
+            ),
+          ),
+        ),
+      );
+      LibraryDatabaseService.storageDirectoryOverride = blocker.path;
+      try {
+        expect(await repository.refresh(), isFalse);
+        expect(repository.status, LibraryStatus.error);
+        expect(
+          await repository.add(Book.fromMap({'id': 'disk_error'})),
+          isFalse,
+        );
+        expect(repository.error, contains('құрылғыға жазылмады'));
+      } finally {
+        LibraryDatabaseService.storageDirectoryOverride = directory.path;
+        repository.dispose();
+      }
+    },
+  );
 
   test(
     'GET merges personal state, removes stale books, and persists snapshot',

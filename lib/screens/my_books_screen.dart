@@ -8,11 +8,13 @@ import 'book_detail_screen.dart';
 class MyBooksScreen extends StatefulWidget {
   final List<Book> books;
   final Future<bool> Function(Book) onBookUpdated;
+  final int initialTabIndex;
 
   const MyBooksScreen({
     super.key,
     required this.books,
     required this.onBookUpdated,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -26,7 +28,19 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant MyBooksScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTabIndex != widget.initialTabIndex) {
+      _tabController.animateTo(widget.initialTabIndex);
+    }
   }
 
   @override

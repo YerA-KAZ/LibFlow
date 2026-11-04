@@ -8,11 +8,12 @@ from typing import Annotated
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from backend.realtime import hub
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
@@ -82,6 +83,13 @@ async def lifespan(_app):
 
 
 app = FastAPI(title='LibFlow REST API', version='1.0.0', lifespan=lifespan)
+
+
+@app.websocket('/ws/catalogue')
+async def catalogue_socket(socket: WebSocket):
+    await hub.handle(socket)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv('CORS_ORIGINS', '').split(','),
@@ -124,18 +132,19 @@ def get_book(book_id: str):
 
 
 @app.post('/api/books', response_model=BookRecord, status_code=201)
-def create_book(book: BookRecord):
+def create_book(book: BookRecord, background_tasks: BackgroundTasks):
     with connect() as db:
         row = db.execute('''INSERT INTO books(id, data) VALUES (%s, %s)
             ON CONFLICT DO NOTHING RETURNING data''',
             (book.id, Jsonb(book.model_dump()))).fetchone()
     if row is None:
         raise HTTPException(409, 'Бұл ID бар кітап бұрын қосылған.')
+    background_tasks.add_task(hub.broadcast)
     return row[0]
 
 
 @app.put('/api/books/{book_id}', response_model=BookRecord)
-def update_book(book_id: str, book: BookRecord):
+def update_book(book_id: str, book: BookRecord, background_tasks: BackgroundTasks):
     if book_id != book.id:
         raise HTTPException(422, 'URL және JSON ішіндегі ID бірдей болуы тиіс.')
     with connect() as db:
@@ -143,13 +152,15 @@ def update_book(book_id: str, book: BookRecord):
             WHERE id = %s RETURNING data''', (Jsonb(book.model_dump()), book_id)).fetchone()
     if row is None:
         raise HTTPException(404, 'Кітап табылмады.')
+    background_tasks.add_task(hub.broadcast)
     return row[0]
 
 
 @app.delete('/api/books/{book_id}', status_code=204)
-def delete_book(book_id: str):
+def delete_book(book_id: str, background_tasks: BackgroundTasks):
     with connect() as db:
         row = db.execute('DELETE FROM books WHERE id = %s RETURNING id', (book_id,)).fetchone()
     if row is None:
         raise HTTPException(404, 'Кітап табылмады.')
+    background_tasks.add_task(hub.broadcast)
     return Response(status_code=204)
