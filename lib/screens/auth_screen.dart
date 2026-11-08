@@ -40,6 +40,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -52,18 +53,43 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.local_library, size: 64),
-                    const Text(
-                      'LibFlow',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 32),
+                    Card(
+                      color: theme.colorScheme.primaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.auto_stories_outlined,
+                              size: 30,
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'LibFlow',
+                              style: theme.textTheme.displaySmall?.copyWith(
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Кітапты табыңыз, брондаңыз және кітапханадан алыңыз.',
+                              style: TextStyle(
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Text(
                       _login ? 'Жүйеге кіру' : 'Тіркелу',
-                      style: const TextStyle(fontSize: 24),
+                      style: theme.textTheme.headlineSmall,
                     ),
-                    if (!_login)
+                    const SizedBox(height: 16),
+                    if (!_login) ...[
                       TextFormField(
                         controller: _name,
                         decoration: const InputDecoration(
@@ -73,6 +99,8 @@ class _AuthScreenState extends State<AuthScreen> {
                             ? 'Аты-жөніңізді енгізіңіз'
                             : null,
                       ),
+                    ],
+                    const SizedBox(height: 10),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
@@ -84,6 +112,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ? 'Email дұрыс емес'
                           : null,
                     ),
+                    const SizedBox(height: 10),
                     TextFormField(
                       controller: _password,
                       obscureText: _hidden,
@@ -91,14 +120,21 @@ class _AuthScreenState extends State<AuthScreen> {
                         labelText: 'Құпиясөз',
                         suffixIcon: IconButton(
                           onPressed: () => setState(() => _hidden = !_hidden),
-                          icon: const Icon(Icons.visibility),
+                          tooltip: _hidden
+                              ? 'Құпиясөзді көрсету'
+                              : 'Құпиясөзді жасыру',
+                          icon: Icon(
+                            _hidden
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
                         ),
                       ),
                       validator: (v) => v == null || v.length < 8
                           ? 'Кемінде 8 таңба енгізіңіз'
                           : null,
                     ),
-                    if (!_login)
+                    if (!_login) ...[
                       TextFormField(
                         controller: _confirm,
                         obscureText: true,
@@ -109,6 +145,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             ? 'Құпиясөздер сәйкес емес'
                             : null,
                       ),
+                    ],
                     const SizedBox(height: 20),
                     if (auth.busy) const LinearProgressIndicator(),
                     if (auth.error != null)

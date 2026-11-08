@@ -101,22 +101,26 @@ class LibraryRepository extends ChangeNotifier {
     await _cacheBook(_withPersonalState(saved, book));
   });
 
-  Future<void> _cacheBook(Book book) async {
-    if (!await cache.insertBook(book)) {
+  Future<void> _cacheBook(Book book, {Loan? reservationHistory}) async {
+    if (!await cache.insertBook(book, reservationHistory: reservationHistory)) {
       throw const LibraryApiException(
         'Серверге сақталды, бірақ құрылғыға жазылмады. Тізімді қайта жаңартыңыз.',
       );
     }
   }
 
-  Future<bool> update(Book book) => _run('update', () async {
-    final local = cache.getBookById(book.id);
-    // External search results are imported with POST before entering our catalogue.
-    final saved = local == null
-        ? await api.createBook(book)
-        : await api.updateBook(book);
-    await _cacheBook(_withPersonalState(saved, book));
-  });
+  Future<bool> update(Book book, {Loan? reservationHistory}) =>
+      _run('update', () async {
+        final local = cache.getBookById(book.id);
+        // External search results are imported with POST before entering our catalogue.
+        final saved = local == null
+            ? await api.createBook(book)
+            : await api.updateBook(book);
+        await _cacheBook(
+          _withPersonalState(saved, book),
+          reservationHistory: reservationHistory,
+        );
+      });
 
   Future<bool> delete(String id) => _run('delete', () async {
     await api.deleteBook(id);

@@ -56,7 +56,9 @@ class LibraryDatabaseService {
       final file = await _getDatabaseFile();
       // Preserve the previous desktop cache when moving to app support storage.
       if (storageDirectoryOverride == null &&
-          !Platform.isAndroid && !Platform.isIOS && !await file.exists()) {
+          !Platform.isAndroid &&
+          !Platform.isIOS &&
+          !await file.exists()) {
         final legacy = File('${Directory.current.path}/$_dbFileName');
         if (await legacy.exists()) await legacy.copy(file.path);
       }
@@ -70,7 +72,12 @@ class LibraryDatabaseService {
             hasStoredBooks = true;
             _booksTable.clear();
             for (var item in data['books']) {
-              _booksTable.add(Book.fromMap(Map<String, dynamic>.from(item)));
+              final book = Book.fromMap(Map<String, dynamic>.from(item));
+              _booksTable.add(
+                book.reservationCode == 'LIB-RES-98124'
+                    ? book.copyWith(isReserved: false)
+                    : book,
+              );
             }
           }
 
@@ -287,18 +294,28 @@ class LibraryDatabaseService {
   // ==========================================
 
   /// Жаңа кітап қосу (Insert Book)
-  Future<bool> insertBook(Book book) async {
+  Future<bool> insertBook(Book book, {Loan? reservationHistory}) async {
+    final existingIndex = _booksTable.indexWhere((item) => item.id == book.id);
+    final previous = existingIndex < 0 ? null : _booksTable[existingIndex];
+    final addHistory =
+        reservationHistory != null &&
+        !_loansTable.any((loan) => loan.id == reservationHistory.id);
     try {
-      // Идентификатор бірегейлігін тексеру
-      final existingIndex = _booksTable.indexWhere((b) => b.id == book.id);
-      if (existingIndex != -1) {
-        _booksTable[existingIndex] = book;
-      } else {
+      if (previous == null) {
         _booksTable.insert(0, book);
+      } else {
+        _booksTable[existingIndex] = book;
       }
+      if (addHistory) _loansTable.insert(0, reservationHistory);
       await _persistDatabase();
       return true;
     } catch (e) {
+      if (previous == null) {
+        _booksTable.remove(book);
+      } else {
+        _booksTable[existingIndex] = previous;
+      }
+      if (addHistory) _loansTable.remove(reservationHistory);
       debugPrint('Қате: Кітап қосу кезінде ақау: $e');
       return false;
     }

@@ -19,6 +19,13 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
 
 
+class ChapterRecord(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    id: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=500)
+    text: str = Field(min_length=1, max_length=1000000)
+
+
 class BookRecord(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     id: str = Field(min_length=1, max_length=120, pattern=r'^[A-Za-z0-9_-]+$')
@@ -44,9 +51,20 @@ class BookRecord(BaseModel):
     hasAudio: bool = False
     audioDuration: str = ''
     readingContent: str = ''
+    chapters: list[ChapterRecord] = Field(default_factory=list, max_length=200)
+    audioUrl: str | None = None
 
     @model_validator(mode='after')
     def check_copies(self):
+        if len({chapter.id for chapter in self.chapters}) != len(self.chapters):
+            raise ValueError('Chapter IDs must be unique')
+        if self.audioUrl is not None:
+            from urllib.parse import urlparse
+            parsed = urlparse(self.audioUrl)
+            if self.audioUrl != 'asset:assets/audio/aesop_fox_grapes.mp3' and (
+                parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+            ):
+                raise ValueError('audioUrl must be HTTPS or the bundled demo asset')
         if self.availableCopies > self.totalCopies:
             raise ValueError('availableCopies cannot exceed totalCopies')
         if self.availableCopies == 0:

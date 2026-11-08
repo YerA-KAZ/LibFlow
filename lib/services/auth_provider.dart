@@ -5,6 +5,12 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'app_log.dart';
+
+class AuthStorageException implements Exception {
+  const AuthStorageException();
+}
+
 abstract class AuthStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
@@ -12,7 +18,11 @@ abstract class AuthStore {
 }
 
 class SecureAuthStore implements AuthStore {
-  final FlutterSecureStorage storage = const FlutterSecureStorage();
+  // Keep the existing default namespace so previously registered accounts remain readable.
+  // Never silently erase accounts when Android reports a key/decryption error.
+  final FlutterSecureStorage storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(resetOnError: false),
+  );
   @override
   Future<String?> read(String key) => storage.read(key: key);
   @override
@@ -29,14 +39,33 @@ class AuthProvider extends ChangeNotifier {
   bool initialized = false;
   bool busy = false;
   String? error;
+  bool _disposed = false;
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
   bool get authenticated => user != null;
   AuthProvider({AuthStore? store, this.iterations = 210000})
     : store = store ?? SecureAuthStore();
 
-  Future<Map<String, dynamic>> _accounts() async =>
-      jsonDecode(await store.read('accounts') ?? '{}') as Map<String, dynamic>;
+  Future<Map<String, dynamic>> _accounts() async {
+    try {
+      return jsonDecode(await store.read('accounts') ?? '{}')
+          as Map<String, dynamic>;
+    } catch (failure) {
+      AppLog.event('auth.accounts_read_failed', error: failure);
+      throw const AuthStorageException();
+    }
+  }
+
+  Future<void> _writeVerified(String key, String value) async {
+    await store.write(key, value);
+    if (await store.read(key) != value) throw const AuthStorageException();
+  }
 
   Future<void> restore() async {
+    user = null;
+    error = null;
     try {
       final session = await store.read('session');
       if (session != null) {
@@ -50,11 +79,12 @@ class AuthProvider extends ChangeNotifier {
         }
         if (user == null) await store.delete('session');
       }
-    } catch (_) {
-      error = 'Сақталған сессия оқылмады. Қайта кіріңіз.';
+    } catch (failure) {
+      AppLog.event('auth.restore_failed', error: failure);
+      error = 'Құрылғыдағы аккаунт деректері оқылмады. Бұл қате аккаунт жоқ дегенді білдірмейді. Қолданба деректерін өшірмей, қайта көріңіз.';
     }
     initialized = true;
-    notifyListeners();
+    _changed();
   }
 
   Map<String, dynamic> _profile(Map<String, dynamic> account) => {
@@ -76,10 +106,10 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     String? name,
   }) async {
-    if (busy) return false;
+    if (_disposed || busy) return false;
     busy = true;
     error = null;
-    notifyListeners();
+    _changed();
     try {
       email = email.trim().toLowerCase();
       if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
@@ -108,7 +138,7 @@ class AuthProvider extends ChangeNotifier {
           'hash': await _hash(password, salt, iterations),
         };
         accounts[email] = account;
-        await store.write('accounts', jsonEncode(accounts));
+        await _writeVerified('accounts', jsonEncode(accounts));
       } else {
         final record = accounts[email];
         if (record == null) {
@@ -129,7 +159,7 @@ class AuthProvider extends ChangeNotifier {
           throw const FormatException('Email немесе құпиясөз қате.');
         }
       }
-      await store.write(
+      await _writeVerified(
         'session',
         jsonEncode({
           'email': email,
@@ -138,17 +168,21 @@ class AuthProvider extends ChangeNotifier {
               .toIso8601String(),
         }),
       );
-      user = _profile(account); 
+      user = _profile(account);
+      AppLog.event(
+        name == null ? 'auth.login_succeeded' : 'auth.registration_saved',
+      );
       return true;
     } on FormatException catch (e) {
       error = e.message;
       return false;
-    } catch (_) {
-      error = 'Қауіпсіз сақтау қолжетімсіз. Қайта көріңіз.';
+    } catch (failure) {
+      AppLog.event('auth.storage_failed', error: failure);
+      error = 'Аккаунтты қауіпсіз сақтау немесе оқу орындалмады. Қолданба деректерін өшірмей, қайта көріңіз.';
       return false;
     } finally {
       busy = false;
-      notifyListeners();
+      _changed();
     }
   }
 
@@ -160,6 +194,12 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       error = 'Сессияны өшіру орындалмады. Қайта көріңіз.';
     }
-    notifyListeners();
+    _changed();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

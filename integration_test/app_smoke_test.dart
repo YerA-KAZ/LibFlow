@@ -121,6 +121,7 @@ void main() {
       await tester.tap(find.text('Профиль').last);
       await tester.pumpAndSettle();
       expect(find.byType(ProfileScreen), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Бронь QR кодын тексеру'), 150);
       await tester.tap(find.text('Бронь QR кодын тексеру'));
       await tester.pumpAndSettle();
       expect(find.byType(QrScannerScreen), findsOneWidget);

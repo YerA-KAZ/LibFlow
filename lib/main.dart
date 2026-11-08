@@ -14,10 +14,13 @@ import 'screens/splash_screen.dart';
 import 'services/library_database_service.dart';
 import 'services/library_repository.dart';
 import 'utils/constants.dart';
+import 'utils/library_theme.dart';
 import 'widgets/connection_banner.dart';
+import 'services/demo_book_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DemoBookService.initialize();
   // Практикалық жұмыс №4: Деректер қорын қосымша басталар алдында инициализациялау
   await LibraryDatabaseService().initializeDatabase();
   runApp(const LibFlowApp());
@@ -47,40 +50,8 @@ class _LibFlowAppState extends State<LibFlowApp> {
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         themeMode: _themeMode,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.light,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.primary,
-            brightness: Brightness.light,
-            primary: AppColors.primary,
-            secondary: AppColors.accent,
-            surface: AppColors.surfaceLight,
-          ),
-          scaffoldBackgroundColor: AppColors.backgroundLight,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.backgroundLight,
-            foregroundColor: AppColors.textPrimaryLight,
-            elevation: 0,
-          ),
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.primary,
-            brightness: Brightness.dark,
-            primary: AppColors.primaryLight,
-            secondary: AppColors.accent,
-            surface: AppColors.surfaceDark,
-          ),
-          scaffoldBackgroundColor: AppColors.backgroundDark,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.backgroundDark,
-            foregroundColor: AppColors.textPrimaryDark,
-            elevation: 0,
-          ),
-        ),
+        theme: libraryTheme(Brightness.light),
+        darkTheme: libraryTheme(Brightness.dark),
         home: Consumer<AuthProvider>(
           builder: (context, auth, _) {
             if (!auth.initialized) {
@@ -122,7 +93,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
     with WidgetsBindingObserver {
   bool _showSplash = true;
   int _currentIndex = 0;
-  int _myBooksTabIndex = 0;
+  int _myBooksTabIndex = 1;
+  int _myBooksRequest = 0;
+  int _searchRequest = 0;
   List<Book> _books = [];
   late final LibraryRepository _repository;
 
@@ -154,7 +127,60 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
     if (state == AppLifecycleState.resumed) _repository.retryRealtime();
   }
 
-  Future<bool> _handleBookUpdate(Book book) => _repository.update(book);
+  Future<bool> _handleBookUpdate(Book book) async {
+    final current = _repository.cache.getBookById(book.id);
+    if (current == null) return false;
+    if (current.isReserved != book.isReserved ||
+        current.reservationCode != book.reservationCode) {
+      if (!book.hasActiveReservation ||
+          current.isReserved ||
+          current.isBorrowed ||
+          !current.isAvailable ||
+          current.availableCopies <= 0 ||
+          book.availableCopies != current.availableCopies - 1) {
+        return false;
+      }
+      return _repository.update(
+        current.copyWith(
+          isReserved: true,
+          reservationTime: book.reservationTime,
+          reservationCode: book.reservationCode,
+          availableCopies: book.availableCopies,
+        ),
+      );
+    }
+    return _repository.update(book);
+  }
+
+  Future<bool> _finishReservation(Book updated) async {
+    final current = _repository.cache.getBookById(updated.id);
+    if (current == null || !current.isReserved || updated.isReserved) {
+      return false;
+    }
+    final user = context.read<AuthProvider>().user;
+    final readerId = user?['ticket'] as String?;
+    final started = current.reservationTime;
+    final now = DateTime.now();
+    final history = readerId == null || readerId.isEmpty || started == null
+        ? null
+        : Loan(
+            id: 'reservation:$readerId:${current.id}:${started.toIso8601String()}',
+            bookId: current.id,
+            readerId: readerId,
+            bookTitle: current.title,
+            readerName: user?['name'] as String? ?? '',
+            borrowDate: started,
+            dueDate: updated.dueDate ?? started.add(const Duration(hours: 24)),
+            returnDate: now,
+            status: updated.isBorrowed && !current.isBorrowed
+                ? 'collected'
+                : current.hasActiveReservation
+                ? 'cancelled'
+                : 'expired',
+            qrCode: '',
+          );
+    return _repository.update(updated, reservationHistory: history);
+  }
 
   Future<bool> _handleBookAdd(Book book) => _repository.add(book);
 
@@ -162,6 +188,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
 
   void _openMyBooks(int tab) => setState(() {
     _myBooksTabIndex = tab;
+    _myBooksRequest++;
     _currentIndex = 2;
   });
 
@@ -179,27 +206,60 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
 
     final screens = [
       HomeScreen(
+        demoBook: DemoBookService.book,
+        loading: _repository.status == LibraryStatus.loading,
+        onSearch: () => setState(() {
+          _currentIndex = 1;
+          _searchRequest++;
+        }),
         readerName:
             context.watch<AuthProvider>().user?['name'] as String? ?? 'Оқырман',
         books: _books,
         onBookUpdated: _handleBookUpdate,
         onNavigateToCatalog: () => setState(() => _currentIndex = 1),
-        onNavigateToMyBooks: () => _openMyBooks(0),
+        onNavigateToMyBooks: () => _openMyBooks(1),
       ),
       CatalogScreen(
         books: _books,
         onBookUpdated: _handleBookUpdate,
-        onBookAdded: _handleBookAdd,
-        onBookDeleted: _handleBookDelete,
+        searchRequest: _searchRequest,
+        loading: _repository.status == LibraryStatus.loading,
       ),
       MyBooksScreen(
+        key: ValueKey(_myBooksRequest),
         books: _books,
         onBookUpdated: _handleBookUpdate,
         initialTabIndex: _myBooksTabIndex,
+        onReservationFinished: _finishReservation,
+        reservationHistory: _repository.cache.loans
+            .where(
+              (loan) =>
+                  loan.id.startsWith('reservation:') &&
+                  loan.readerId ==
+                      context.watch<AuthProvider>().user?['ticket'],
+            )
+            .toList(),
       ),
       ProfileScreen(
+        onOpenStaff: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => ListenableBuilder(
+              listenable: _repository,
+              builder: (context, _) => CatalogScreen(
+                staff: true,
+                onReservationFinished: _finishReservation,
+                books: _repository.books,
+                loading: _repository.status == LibraryStatus.loading,
+                onBookUpdated: _handleBookUpdate,
+                onBookAdded: _handleBookAdd,
+                onBookDeleted: _handleBookDelete,
+              ),
+            ),
+          ),
+        ),
         onNavigateToFavorites: () => _openMyBooks(2),
-        onNavigateToMyBooks: () => _openMyBooks(0),
+        onNavigateToMyBooks: () => _openMyBooks(1),
         isDarkMode: widget.isDarkMode,
         onThemeToggle: widget.onThemeToggle,
         onLogout: () async {
@@ -214,27 +274,23 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
     ];
 
     return Scaffold(
-      body: Column(
-        children: [
-          ConnectionBanner(repository: _repository),
-          if (_repository.status == LibraryStatus.loading)
-            const LinearProgressIndicator(),
-          Expanded(
-            child: IndexedStack(index: _currentIndex, children: screens),
-          ),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            ConnectionBanner(repository: _repository),
+            if (_repository.status == LibraryStatus.loading)
+              const LinearProgressIndicator(),
+            Expanded(
+              child: IndexedStack(index: _currentIndex, children: screens),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        backgroundColor: widget.isDarkMode
-            ? AppColors.surfaceDark
-            : Colors.white,
-        indicatorColor: AppColors.primary.withAlpha(
-          widget.isDarkMode ? 60 : 30,
-        ),
-        elevation: 3,
-        height: 68,
         onDestinationSelected: (index) {
+          FocusManager.instance.primaryFocus?.unfocus();
           setState(() {
             _currentIndex = index;
           });
@@ -242,28 +298,22 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
+            selectedIcon: Icon(Icons.home_rounded),
             label: 'Басты',
           ),
           NavigationDestination(
             icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(
-              Icons.grid_view_rounded,
-              color: AppColors.primary,
-            ),
+            selectedIcon: Icon(Icons.grid_view_rounded),
             label: 'Каталог',
           ),
           NavigationDestination(
-            icon: Icon(Icons.favorite_border_rounded),
-            selectedIcon: Icon(
-              Icons.favorite_rounded,
-              color: AppColors.primary,
-            ),
-            label: 'Таңдаулы',
+            icon: Icon(Icons.confirmation_number_outlined),
+            selectedIcon: Icon(Icons.confirmation_number_rounded),
+            label: 'Броньдар',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded, color: AppColors.primary),
+            selectedIcon: Icon(Icons.person_rounded),
             label: 'Профиль',
           ),
         ],

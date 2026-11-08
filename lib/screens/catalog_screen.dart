@@ -3,17 +3,22 @@ import 'package:flutter/material.dart';
 import '../models/book_model.dart';
 import '../services/books_api_service.dart';
 import '../services/library_database_service.dart';
-import '../utils/constants.dart';
+import '../widgets/library_book_tile.dart';
 import 'book_detail_screen.dart';
 import 'book_form_screen.dart';
+import 'qr_scanner_screen.dart';
 
-enum CatalogSource { all, openLibrary, googleBooks, localOnly }
+enum CatalogSource { localOnly, all, openLibrary, googleBooks }
 
 class CatalogScreen extends StatefulWidget {
   final List<Book> books;
   final Future<bool> Function(Book) onBookUpdated;
   final Future<bool> Function(Book)? onBookAdded;
   final Future<bool> Function(String bookId)? onBookDeleted;
+  final bool staff;
+  final Future<bool> Function(Book)? onReservationFinished;
+  final int searchRequest;
+  final bool loading;
 
   const CatalogScreen({
     super.key,
@@ -21,6 +26,10 @@ class CatalogScreen extends StatefulWidget {
     required this.onBookUpdated,
     this.onBookAdded,
     this.onBookDeleted,
+    this.staff = false,
+    this.onReservationFinished,
+    this.searchRequest = 0,
+    this.loading = false,
   });
 
   @override
@@ -28,914 +37,209 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _selectedCategory = 'Барлығы';
-  bool _onlyAvailable = false;
-  bool _onlyAudio = false;
-  bool _onlyEBook = false;
-  BookSortOption _sortOption = BookSortOption.titleAsc;
+  final _search = TextEditingController();
+  final _focus = FocusNode();
+  CatalogSource _source = CatalogSource.localOnly;
+  String? _category;
+  bool _available = false;
+  bool _audio = false;
+  bool _ebook = false;
+  bool _loading = false;
+  String? _message;
+  int _request = 0;
+  List<Book> _external = [];
+  BookSortOption _sort = BookSortOption.titleAsc;
 
-  CatalogSource _selectedSource = CatalogSource.all;
-  bool _isLoadingApi = false;
-  String? _apiErrorMessage;
-  List<Book> _apiSearchResults = [];
+  static const _sources = {
+    CatalogSource.localOnly: 'Кітапхана қоры',
+    CatalogSource.all: 'Барлық сыртқы дереккөз',
+    CatalogSource.openLibrary: 'Open Library',
+    CatalogSource.googleBooks: 'Google Books',
+  };
+  static const _sorts = {
+    BookSortOption.titleAsc: 'Атауы · А–Я',
+    BookSortOption.titleDesc: 'Атауы · Я–А',
+    BookSortOption.ratingDesc: 'Рейтинг',
+    BookSortOption.yearDesc: 'Жаңа басылымдар',
+    BookSortOption.yearAsc: 'Ескі басылымдар',
+    BookSortOption.pagesAsc: 'Бет саны',
+  };
+
+  bool get _local => _source == CatalogSource.localOnly;
+  List<String> get _categories =>
+      (widget.books
+          .map((book) => book.category)
+          .where((category) => category.trim().isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort());
+
+  @override
+  void didUpdateWidget(covariant CatalogScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.searchRequest != oldWidget.searchRequest) {
+      _source = CatalogSource.localOnly;
+      _invalidateSearch();
+      _focus.requestFocus();
+    }
+  }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _search.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  // Trigger online API search for Google Books & Open Library
-  Future<void> _performOnlineSearch([String? overrideQuery]) async {
-    final query = (overrideQuery ?? _searchController.text).trim();
-    if (query.isEmpty) {
-      setState(() {
-        _apiSearchResults = [];
-        _apiErrorMessage = null;
-      });
-      return;
-    }
+  void _invalidateSearch() {
+    _request++;
+    _loading = false;
+    _message = null;
+    _external = [];
+  }
 
+  Future<void> _searchOnline() async {
+    final query = _search.text.trim();
+    if (_local || query.isEmpty) return;
+    final request = ++_request;
     setState(() {
-      _isLoadingApi = true;
-      _apiErrorMessage = null;
+      _loading = true;
+      _message = null;
+      _external = [];
     });
-
     try {
-      List<Book> results = [];
-      switch (_selectedSource) {
-        case CatalogSource.openLibrary:
-          results = await BooksApiService.searchOpenLibrary(query, limit: 20);
-          break;
-        case CatalogSource.googleBooks:
-          results = await BooksApiService.searchGoogleBooks(
-            query,
-            maxResults: 20,
-          );
-          break;
-        case CatalogSource.all:
-          results = await BooksApiService.searchCombined(query, limit: 25);
-          break;
-        case CatalogSource.localOnly:
-          results = [];
-          break;
-      }
-
-      if (mounted) {
-        setState(() {
-          _apiSearchResults = results;
-          _isLoadingApi = false;
-          if (results.isEmpty && _selectedSource != CatalogSource.localOnly) {
-            _apiErrorMessage =
-                'Онлайн базадан сәйкес кітап табылмады немесе желі шектеулі.';
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingApi = false;
-          _apiErrorMessage = 'Іздеу кезінде қате орын алды: $e';
-        });
-      }
+      final results = await switch (_source) {
+        CatalogSource.openLibrary => BooksApiService.searchOpenLibrary(
+          query,
+          limit: 20,
+        ),
+        CatalogSource.googleBooks => BooksApiService.searchGoogleBooks(
+          query,
+          maxResults: 20,
+        ),
+        CatalogSource.all => BooksApiService.searchCombined(query, limit: 25),
+        CatalogSource.localOnly => Future.value(<Book>[]),
+      };
+      if (!mounted || request != _request) return;
+      setState(() {
+        _external = results;
+        _loading = false;
+        if (results.isEmpty) {
+          _message = 'Нәтиже жоқ. Сұрауды және интернет байланысын тексеріңіз.';
+        }
+      });
+    } catch (_) {
+      if (!mounted || request != _request) return;
+      setState(() {
+        _loading = false;
+        _message = 'Сыртқы каталогқа қосылу мүмкін болмады. Қайта көріңіз.';
+      });
     }
   }
 
-  void _clearAllFilters() {
-    setState(() {
-      _searchController.clear();
-      _selectedCategory = 'Барлығы';
-      _onlyAvailable = false;
-      _onlyAudio = false;
-      _onlyEBook = false;
-      _selectedSource = CatalogSource.all;
-      _apiSearchResults = [];
-      _apiErrorMessage = null;
-    });
+  List<Book> _results() {
+    final query = _search.text.trim().toLowerCase();
+    final candidates = _local
+        ? widget.books.where((book) {
+            return [
+                  book.title,
+                  book.author,
+                  book.isbn,
+                  book.description,
+                  book.category,
+                ].any((value) => value.toLowerCase().contains(query)) &&
+                (_category == null || book.category == _category) &&
+                (!_available ||
+                    (book.isAvailable && book.availableCopies > 0)) &&
+                (!_audio || book.hasAudio) &&
+                (!_ebook || book.hasEBook);
+          })
+        : _external;
+    return LibraryDatabaseService().sortBooks(candidates.toList(), _sort);
   }
 
-  void _showSortModal(bool isDark) {
-    showModalBottomSheet(
+  void _filters() {
+    showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Кітаптарды сұрыптау',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildSortTile(
-                  'Атауы бойынша (А-дан Я-ға дейін)',
-                  BookSortOption.titleAsc,
-                  Icons.sort_by_alpha_rounded,
-                ),
-                _buildSortTile(
-                  'Атауы бойынша (Я-дан А-ға дейін)',
-                  BookSortOption.titleDesc,
-                  Icons.sort_by_alpha_rounded,
-                ),
-                _buildSortTile(
-                  'Рейтингі бойынша (Ең жоғары бағаланғандар)',
-                  BookSortOption.ratingDesc,
-                  Icons.star_rounded,
-                ),
-                _buildSortTile(
-                  'Шыққан жылы бойынша (Жаңа кітаптар)',
-                  BookSortOption.yearDesc,
-                  Icons.calendar_month_rounded,
-                ),
-                _buildSortTile(
-                  'Шыққан жылы бойынша (Ескі кітаптар)',
-                  BookSortOption.yearAsc,
-                  Icons.history_rounded,
-                ),
-                _buildSortTile(
-                  'Бет саны бойынша (Шағын кітаптар)',
-                  BookSortOption.pagesAsc,
-                  Icons.auto_stories_rounded,
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          void change(VoidCallback update) {
+            setState(update);
+            setSheetState(() {});
+          }
 
-  Widget _buildSortTile(String title, BookSortOption option, IconData icon) {
-    final isSelected = _sortOption == option;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: isSelected ? AppColors.primary : Colors.grey),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? AppColors.primary : null,
-          fontSize: 14,
-        ),
-      ),
-      trailing: isSelected
-          ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
-          : null,
-      onTap: () {
-        setState(() {
-          _sortOption = option;
-        });
-        Navigator.pop(context);
-      },
-    );
-  }
-
-  String get _sortOptionLabel {
-    switch (_sortOption) {
-      case BookSortOption.titleAsc:
-        return 'А-Я';
-      case BookSortOption.titleDesc:
-        return 'Я-А';
-      case BookSortOption.ratingDesc:
-        return 'Рейтинг ⭐';
-      case BookSortOption.yearDesc:
-        return 'Жаңа 📅';
-      case BookSortOption.yearAsc:
-        return 'Ескі 📅';
-      case BookSortOption.pagesAsc:
-        return 'Бет саны 📄';
-    }
-  }
-
-  List<Book> get _currentDisplayList {
-    final query = _searchController.text.trim().toLowerCase();
-
-    List<Book> baseList;
-
-    // If API search has results or user is in OpenLibrary / GoogleBooks mode
-    if (_apiSearchResults.isNotEmpty) {
-      baseList = _apiSearchResults;
-    } else {
-      baseList = widget.books.where((book) {
-        final matchesQuery =
-            query.isEmpty ||
-            book.title.toLowerCase().contains(query) ||
-            book.author.toLowerCase().contains(query) ||
-            book.isbn.toLowerCase().contains(query) ||
-            book.description.toLowerCase().contains(query);
-
-        final matchesCategory =
-            _selectedCategory == 'Барлығы' ||
-            book.category == _selectedCategory;
-
-        final matchesAvailable = !_onlyAvailable || book.isAvailable;
-        final matchesAudio = !_onlyAudio || book.hasAudio;
-        final matchesEBook = !_onlyEBook || book.hasEBook;
-
-        return matchesQuery &&
-            matchesCategory &&
-            matchesAvailable &&
-            matchesAudio &&
-            matchesEBook;
-      }).toList();
-    }
-
-    // Apply Sorting via LibraryDatabaseService
-    return LibraryDatabaseService().sortBooks(baseList, _sortOption);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final results = _currentDisplayList;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Кітаптар каталогы',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            tooltip: 'Жаңа кітап қосу',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => BookFormScreen(
-                    onSave: (newBook) =>
-                        (widget.onBookAdded ?? widget.onBookUpdated)(newBook),
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_sync_rounded),
-            tooltip: 'API деректерін жаңарту',
-            onPressed: () => _performOnlineSearch(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Search Input Bar with Online Search Action
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    onSubmitted: (val) => _performOnlineSearch(val),
-                    decoration: InputDecoration(
-                      hintText: 'Атауы, авторы, ISBN немесе тақырыбы...',
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        color: AppColors.primaryLight,
-                      ),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _apiSearchResults = [];
-                                  _apiErrorMessage = null;
-                                });
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: isDark
-                          ? AppColors.surfaceDark
-                          : Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Search button
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: IconButton(
-                    icon: _isLoadingApi
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: Colors.white,
-                          ),
-                    tooltip: 'Іздеу (API + Қор)',
-                    onPressed: _isLoadingApi
-                        ? null
-                        : () => _performOnlineSearch(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // API Source Selector Chips
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          return SafeArea(
             child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildSourceChip(
-                    label: 'Барлығы (API + Қор)',
-                    source: CatalogSource.all,
-                    icon: Icons.hub_rounded,
-                    isDark: isDark,
+                  Text(
+                    'Сүзгі және сұрыптау',
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  const SizedBox(width: 8),
-                  _buildSourceChip(
-                    label: 'Open Library API',
-                    source: CatalogSource.openLibrary,
-                    icon: Icons.public_rounded,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSourceChip(
-                    label: 'Google Books API',
-                    source: CatalogSource.googleBooks,
-                    icon: Icons.auto_stories_rounded,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSourceChip(
-                    label: 'LibFlow қоры',
-                    source: CatalogSource.localOnly,
-                    icon: Icons.account_balance_rounded,
-                    isDark: isDark,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Categories horizontal scroll matching Figma (Барлығы, Роман, Тарих, Басқа)
-          SizedBox(
-            height: 38,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: ['Барлығы', 'Роман', 'Тарих', 'Басқа'].map((cat) {
-                final isSelected = _selectedCategory == cat;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedCategory = cat;
-                      });
-                      if (cat != 'Барлығы' &&
-                          _selectedSource != CatalogSource.localOnly) {
-                        _performOnlineSearch(cat);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primary
-                            : (isDark ? AppColors.surfaceDark : Colors.white),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : (isDark
-                                    ? AppColors.borderDark
-                                    : AppColors.borderLight),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<BookSortOption>(
+                    initialValue: _sort,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Сұрыптау'),
+                    items: [
+                      for (final entry in _sorts.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
                         ),
-                      ),
-                      child: Text(
-                        cat,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : (isDark
-                                    ? Colors.white70
-                                    : AppColors.textPrimaryLight),
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          // Filter toggles
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  FilterChip(
-                    avatar: Icon(
-                      Icons.check_circle_outline,
-                      size: 16,
-                      color: _onlyAvailable ? Colors.white : Colors.green,
-                    ),
-                    label: const Text(
-                      'Тек қолда барлар',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    selected: _onlyAvailable,
-                    onSelected: (val) => setState(() => _onlyAvailable = val),
-                    selectedColor: AppColors.success,
-                    labelStyle: TextStyle(
-                      color: _onlyAvailable ? Colors.white : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    avatar: Icon(
-                      Icons.headphones,
-                      size: 16,
-                      color: _onlyAudio ? Colors.white : Colors.amber,
-                    ),
-                    label: const Text(
-                      'Аудиокітап',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    selected: _onlyAudio,
-                    onSelected: (val) => setState(() => _onlyAudio = val),
-                    selectedColor: Colors.amber[800],
-                    labelStyle: TextStyle(
-                      color: _onlyAudio ? Colors.white : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    avatar: Icon(
-                      Icons.menu_book,
-                      size: 16,
-                      color: _onlyEBook ? Colors.white : Colors.blue,
-                    ),
-                    label: const Text(
-                      'Электронды',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    selected: _onlyEBook,
-                    onSelected: (val) => setState(() => _onlyEBook = val),
-                    selectedColor: AppColors.primaryLight,
-                    labelStyle: TextStyle(
-                      color: _onlyEBook ? Colors.white : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Divider(height: 10),
-
-          // Results header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'Табылған кітаптар: ${results.length}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.textSecondaryDark
-                            : AppColors.textSecondaryLight,
-                      ),
-                    ),
-                    if (_apiSearchResults.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.info.withAlpha(30),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Live API нәтижелері',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.info,
-                          ),
-                        ),
-                      ),
                     ],
+                    onChanged: (value) => change(() => _sort = value!),
+                  ),
+                  if (_local) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _categories.contains(_category)
+                          ? _category
+                          : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Жанр'),
+                      hint: const Text('Барлық жанр'),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          child: Text('Барлық жанр'),
+                        ),
+                        for (final category in _categories)
+                          DropdownMenuItem(
+                            value: category,
+                            child: Text(
+                              category,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => change(() => _category = value),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Тек қолда бар даналар'),
+                      value: _available,
+                      onChanged: (value) => change(() => _available = value),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Аудиосы бар'),
+                      value: _audio,
+                      onChanged: (value) => change(() => _audio = value),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Электронды мәтіні бар'),
+                      value: _ebook,
+                      onChanged: (value) => change(() => _ebook = value),
+                    ),
                   ],
-                ),
-                if (_apiSearchResults.isNotEmpty)
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _apiSearchResults = [];
-                        _searchController.clear();
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(50, 30),
-                    ),
-                    child: const Text(
-                      'Тазарту',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Error banner if any
-          if (_apiErrorMessage != null)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withAlpha(25),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 18,
-                    color: AppColors.warning,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _apiErrorMessage!,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Нәтижені көрсету'),
                   ),
                 ],
-              ),
-            ),
-
-          // Figma 07: "Танымал кітаптар" Header + Сұрыптау батырмасы
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Танымал кітаптар',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withAlpha(25),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${results.length}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // Сұрыптау батырмасы (Sort button)
-                InkWell(
-                  onTap: () => _showSortModal(isDark),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.surfaceDark : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.primary.withAlpha(80),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.sort_rounded,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          _sortOptionLabel,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // List View matching Figma Screen 07
-          Expanded(
-            child: _isLoadingApi
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(color: AppColors.primary),
-                        SizedBox(height: 16),
-                        Text(
-                          'Google Books және Open Library базаларынан ізделуде...',
-                          style: TextStyle(fontSize: 13, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                : results.isEmpty
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.white10
-                                    : Colors.grey[200],
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.search_off_rounded,
-                                size: 44,
-                                color: isDark
-                                    ? Colors.white38
-                                    : Colors.grey[500],
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            const Text(
-                              'Сәйкес кітап табылмады',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Іздеу сұрауын немесе сүзгі параметрлерін өзгертіп көріңіз.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark
-                                    ? AppColors.textSecondaryDark
-                                    : AppColors.textSecondaryLight,
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: const Icon(Icons.refresh_rounded, size: 18),
-                              label: const Text('Сүзгілерді тазарту'),
-                              onPressed: _clearAllFilters,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    itemCount: results.length,
-                    itemBuilder: (context, index) {
-                      final book = results[index];
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => BookDetailScreen(
-                                book: book,
-                                onBookUpdated: widget.onBookUpdated,
-                                onBookDeleted: widget.onBookDeleted,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.surfaceDark
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isDark
-                                  ? AppColors.borderDark
-                                  : AppColors.borderLight,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              // Mini Book Cover with circle
-                              Container(
-                                width: 50,
-                                height: 68,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: book.coverGradient,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 22,
-                                      height: 22,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(0xFFD4A373),
-                                          width: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      book.title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      book.author,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isDark
-                                            ? AppColors.textSecondaryDark
-                                            : AppColors.textSecondaryLight,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.star_rounded,
-                                          size: 14,
-                                          color: Color(0xFFD4A373),
-                                        ),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          '${book.rating}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            '•  ${book.category}',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: isDark
-                                                  ? AppColors.textSecondaryDark
-                                                  : AppColors
-                                                        .textSecondaryLight,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: isDark
-                                    ? Colors.white38
-                                    : Colors.grey[400],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'Кітап қосу',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => BookFormScreen(
-                onSave: (newBook) =>
-                    (widget.onBookAdded ?? widget.onBookUpdated)(newBook),
               ),
             ),
           );
@@ -944,48 +248,235 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  Widget _buildSourceChip({
-    required String label,
-    required CatalogSource source,
-    required IconData icon,
-    required bool isDark,
-  }) {
-    final isSelected = _selectedSource == source;
-    return ChoiceChip(
-      avatar: Icon(
-        icon,
-        size: 15,
-        color: isSelected
-            ? Colors.white
-            : (isDark ? Colors.white70 : AppColors.primary),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final books = _results();
+    final loading = _local ? widget.loading : _loading;
+    final hasFilters = _category != null || _available || _audio || _ebook;
+    final emptyLabel = _local
+        ? widget.books.isEmpty
+              ? 'Каталог әзірге бос'
+              : 'Сәйкес кітап табылмады'
+        : _message ??
+              'Сыртқы каталогтан іздеу үшін атауын немесе авторын енгізіңіз.';
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.staff ? 'Қызметкер бөлімі' : 'Кітаптар каталогы'),
+        actions: [
+          if (widget.staff)
+            IconButton(
+              tooltip: 'Бронь QR кодын тексеру',
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => QrScannerScreen(
+                    onBookUpdated: widget.onReservationFinished,
+                  ),
+                ),
+              ),
+            ),
+          if (widget.staff && widget.onBookAdded != null)
+            IconButton(
+              tooltip: 'Жаңа кітап қосу',
+              icon: const Icon(Icons.add_rounded),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => BookFormScreen(onSave: widget.onBookAdded!),
+                ),
+              ),
+            ),
+        ],
       ),
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (val) {
-        if (val) {
-          setState(() {
-            _selectedSource = source;
-          });
-          if (_searchController.text.trim().isNotEmpty) {
-            _performOnlineSearch();
-          }
-        }
-      },
-      selectedColor: AppColors.primary,
-      labelStyle: TextStyle(
-        fontSize: 11,
-        color: isSelected
-            ? Colors.white
-            : (isDark ? Colors.white70 : Colors.black87),
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey[100],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isSelected
-              ? AppColors.primary
-              : (isDark ? AppColors.borderDark : AppColors.borderLight),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+                sliver: SliverList.list(
+                  children: [
+                    Text(
+                      widget.staff ? 'Қорды басқару' : 'Кітап табыңыз',
+                      style: theme.textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    ...[
+                      DropdownButtonFormField<CatalogSource>(
+                        key: ValueKey(_source),
+                        initialValue: _source,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Іздеу аймағы',
+                          prefixIcon: Icon(Icons.shelves),
+                        ),
+                        items: [
+                          for (final entry in _sources.entries)
+                            DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _source = value!;
+                            _invalidateSearch();
+                          });
+                          _searchOnline();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _search,
+                            focusNode: _focus,
+                            textInputAction: TextInputAction.search,
+                            onChanged: (_) => setState(_invalidateSearch),
+                            onSubmitted: (_) => _searchOnline(),
+                            decoration: InputDecoration(
+                              hintText: 'Атауы, авторы немесе ISBN',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _search.text.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Іздеуді тазарту',
+                                      onPressed: () => setState(() {
+                                        _search.clear();
+                                        _invalidateSearch();
+                                      }),
+                                      icon: const Icon(Icons.close),
+                                    ),
+                            ),
+                          ),
+                        ),
+                        if (!_local) ...[
+                          const SizedBox(width: 8),
+                          IconButton.filled(
+                            tooltip: 'Сыртқы каталогтан іздеу',
+                            onPressed: _loading || _search.text.trim().isEmpty
+                                ? null
+                                : _searchOnline,
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (!_local)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          'Сыртқы дереккөздер кітап туралы мәлімет береді. Қолжетімді даналар кітапхана қорында көрсетіледі.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '${books.length} кітап',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        TextButton.icon(
+                          onPressed: _filters,
+                          icon: const Icon(Icons.tune_rounded),
+                          label: Text(
+                            hasFilters && _local
+                                ? 'Сүзгі · белсенді'
+                                : 'Сүзгі және сұрыптау',
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (loading && (!_local || widget.staff))
+                      const LinearProgressIndicator(),
+                  ],
+                ),
+              ),
+              if (books.isEmpty && !loading)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 40,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          emptyLabel,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        if (_message != null)
+                          TextButton(
+                            onPressed: _searchOnline,
+                            child: const Text('Қайта іздеу'),
+                          ),
+                        if (_local && (hasFilters || _search.text.isNotEmpty))
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _search.clear();
+                              _category = null;
+                              _available = _audio = _ebook = false;
+                            }),
+                            child: const Text('Сүзгілерді тазарту'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                sliver: SliverList.builder(
+                  itemCount: books.length,
+                  itemBuilder: (context, index) {
+                    final book = books[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: LibraryBookTile(
+                        book: book,
+                        inCollection: _local,
+                        showInventory: widget.staff && _local,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => BookDetailScreen(
+                              book: book,
+                              inCollection: _local,
+                              staff: widget.staff,
+                              onBookAdded:
+                                  widget.staff &&
+                                      !widget.books.any(
+                                        (item) => item.id == book.id,
+                                      )
+                                  ? widget.onBookAdded
+                                  : null,
+                              onBookUpdated: widget.onBookUpdated,
+                              onBookDeleted: widget.staff
+                                  ? widget.onBookDeleted
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

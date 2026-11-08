@@ -4,13 +4,33 @@ import '../models/book_model.dart';
 import '../utils/constants.dart';
 
 class BookFormScreen extends StatefulWidget {
-  final Book? book; // If provided, edit mode. If null, create mode.
+  final Book? book;
+  final bool importing;
   final Future<bool> Function(Book) onSave;
 
-  const BookFormScreen({super.key, this.book, required this.onSave});
+  const BookFormScreen({
+    super.key,
+    this.book,
+    this.importing = false,
+    required this.onSave,
+  });
 
   @override
   State<BookFormScreen> createState() => _BookFormScreenState();
+}
+
+class _ChapterEditor {
+  final String id;
+  final TextEditingController title;
+  final TextEditingController text;
+  _ChapterEditor(BookChapter chapter)
+    : id = chapter.id,
+      title = TextEditingController(text: chapter.title),
+      text = TextEditingController(text: chapter.text);
+  void dispose() {
+    title.dispose();
+    text.dispose();
+  }
 }
 
 class _BookFormScreenState extends State<BookFormScreen> {
@@ -24,10 +44,13 @@ class _BookFormScreenState extends State<BookFormScreen> {
   late TextEditingController _pagesController;
   late TextEditingController _publishYearController;
   late TextEditingController _totalCopiesController;
+  late TextEditingController _availableCopiesController;
   late TextEditingController _coverUrlController;
   late TextEditingController _audioDurationController;
   late TextEditingController _readingContentController;
 
+  late TextEditingController _audioUrlController;
+  final List<_ChapterEditor> _chapterEditors = [];
   late String _selectedCategory;
   late bool _hasEBook;
   late bool _hasAudio;
@@ -76,11 +99,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _titleController = TextEditingController(text: b?.title ?? '');
     _authorController = TextEditingController(text: b?.author ?? '');
     _descriptionController = TextEditingController(text: b?.description ?? '');
-    _isbnController = TextEditingController(
-      text:
-          b?.isbn ??
-          '978-601-${DateTime.now().millisecondsSinceEpoch.toString().substring(6, 12)}',
-    );
+    _isbnController = TextEditingController(text: b?.isbn ?? '');
     _pagesController = TextEditingController(
       text: (b?.pages ?? 250).toString(),
     );
@@ -88,7 +107,10 @@ class _BookFormScreenState extends State<BookFormScreen> {
       text: (b?.publishYear ?? DateTime.now().year).toString(),
     );
     _totalCopiesController = TextEditingController(
-      text: (b?.totalCopies ?? 5).toString(),
+      text: (b?.totalCopies ?? 0).toString(),
+    );
+    _availableCopiesController = TextEditingController(
+      text: (b?.availableCopies ?? 0).toString(),
     );
     _coverUrlController = TextEditingController(text: b?.coverUrl ?? '');
     _coverUrlController.addListener(_onCoverUrlChanged);
@@ -96,15 +118,25 @@ class _BookFormScreenState extends State<BookFormScreen> {
       text: b?.audioDuration ?? '1 сағ 45 мин',
     );
     _readingContentController = TextEditingController(
-      text: b?.readingContent ?? 'Бұл кітаптың толық электронды мәтіні осы жерге жүктеледі немесе оқырмандарға ұсынылады.',
+      text: b?.readingContent ?? '',
     );
 
-    _selectedCategory = (b != null && _categories.contains(b.category))
-        ? b.category
-        : _categories.first;
+    _audioUrlController = TextEditingController(text: b?.audioUrl ?? '');
+    _chapterEditors.addAll(
+      (b?.chapters ?? <BookChapter>[]).map(_ChapterEditor.new),
+    );
+    final category = b?.category.trim();
+    if (category != null &&
+        category.isNotEmpty &&
+        !_categories.contains(category)) {
+      _categories.add(category);
+    }
+    _selectedCategory = category == null || category.isEmpty
+        ? _categories.first
+        : category;
     _hasEBook = b?.hasEBook ?? true;
     _hasAudio = b?.hasAudio ?? false;
-    _isAvailable = b?.isAvailable ?? true;
+    _isAvailable = widget.importing || (b?.isAvailable ?? true);
   }
 
   void _onCoverUrlChanged() {
@@ -121,9 +153,14 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _pagesController.dispose();
     _publishYearController.dispose();
     _totalCopiesController.dispose();
+    _availableCopiesController.dispose();
     _coverUrlController.dispose();
     _audioDurationController.dispose();
     _readingContentController.dispose();
+    _audioUrlController.dispose();
+    for (final editor in _chapterEditors) {
+      editor.dispose();
+    }
     super.dispose();
   }
 
@@ -143,15 +180,19 @@ class _BookFormScreenState extends State<BookFormScreen> {
     final year =
         int.tryParse(_publishYearController.text.trim()) ?? DateTime.now().year;
     final totalCopies = int.tryParse(_totalCopiesController.text.trim()) ?? 3;
-    final isEdit = widget.book != null;
+    final isEdit = widget.book != null && !widget.importing;
+
+    final availableCopies = isEdit
+        ? int.parse(_availableCopiesController.text.trim())
+        : totalCopies;
 
     final resultBook = Book(
       id: widget.book?.id ?? 'book_${DateTime.now().millisecondsSinceEpoch}',
       title: _titleController.text.trim(),
       author: _authorController.text.trim(),
       category: _selectedCategory,
-      rating: widget.book?.rating ?? 4.8,
-      reviewCount: widget.book?.reviewCount ?? 12,
+      rating: widget.book?.rating ?? 0,
+      reviewCount: widget.book?.reviewCount ?? 0,
       pages: pages,
       publishYear: year,
       isbn: _isbnController.text.trim(),
@@ -162,18 +203,28 @@ class _BookFormScreenState extends State<BookFormScreen> {
       coverUrl: _coverUrlController.text.trim().isNotEmpty
           ? _coverUrlController.text.trim()
           : widget.book?.coverUrl,
+      previewUrl: widget.book?.previewUrl,
+      infoUrl: widget.book?.infoUrl,
       source: widget.book?.source ?? 'LibFlow',
-      isAvailable: _isAvailable && totalCopies > 0,
-      availableCopies: widget.book != null
-          ? (widget.book!.availableCopies > totalCopies
-                ? totalCopies
-                : widget.book!.availableCopies)
-          : totalCopies,
+      isAvailable: _isAvailable && availableCopies > 0,
+      availableCopies: availableCopies,
       totalCopies: totalCopies,
       hasEBook: _hasEBook,
       hasAudio: _hasAudio,
       audioDuration: _audioDurationController.text.trim(),
       readingContent: _readingContentController.text.trim(),
+      chapters: _chapterEditors
+          .map(
+            (e) => BookChapter(
+              id: e.id,
+              title: e.title.text.trim(),
+              text: e.text.text.trim(),
+            ),
+          )
+          .toList(),
+      audioUrl: _hasAudio && _audioUrlController.text.trim().isNotEmpty
+          ? _audioUrlController.text.trim()
+          : null,
       isFavorite: widget.book?.isFavorite ?? false,
       isReserved: widget.book?.isReserved ?? false,
       reservationTime: widget.book?.reservationTime,
@@ -216,7 +267,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isEdit = widget.book != null;
+    final isEdit = widget.book != null && !widget.importing;
 
     return Scaffold(
       backgroundColor: isDark
@@ -230,7 +281,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.check_rounded, color: AppColors.primary),
+            icon: const Icon(Icons.check_rounded),
             tooltip: 'Сақтау',
             onPressed: _isSaving ? null : _saveBook,
           ),
@@ -259,14 +310,14 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(25),
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       isEdit
                           ? Icons.edit_note_rounded
                           : Icons.library_add_rounded,
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       size: 28,
                     ),
                   ),
@@ -427,8 +478,10 @@ class _BookFormScreenState extends State<BookFormScreen> {
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) return 'Жылы';
                       final year = int.tryParse(val.trim());
-                      if (year == null || year < 1800 || year > 2030) {
-                        return '1800-2030';
+                      if (year == null ||
+                          year < 0 ||
+                          year > DateTime.now().year + 1) {
+                        return 'Жылды тексеріңіз';
                       }
                       return null;
                     },
@@ -444,17 +497,11 @@ class _BookFormScreenState extends State<BookFormScreen> {
                   child: TextFormField(
                     controller: _isbnController,
                     decoration: _inputDecoration(
-                      label: 'ISBN коды *',
+                      label: 'ISBN',
                       hint: '978-601-03-0145-2',
                       icon: Icons.qr_code_rounded,
                       isDark: isDark,
                     ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'ISBN коды қажет';
-                      }
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -482,6 +529,31 @@ class _BookFormScreenState extends State<BookFormScreen> {
             ),
             const SizedBox(height: 16),
 
+            if (isEdit) ...[
+              TextFormField(
+                controller: _availableCopiesController,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration(
+                  label: 'Қолда бар дана саны',
+                  hint: '0',
+                  icon: Icons.inventory_outlined,
+                  isDark: isDark,
+                ),
+                validator: (value) {
+                  final copies = int.tryParse(value?.trim() ?? '');
+                  final total = int.tryParse(
+                    _totalCopiesController.text.trim(),
+                  );
+                  if (copies == null ||
+                      copies < 0 ||
+                      (total != null && copies > total)) {
+                    return 'Қолда бар дана саны қор санынан аспауы керек';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
             // Cover URL with Live Preview & Presets
             Container(
               padding: const EdgeInsets.all(14),
@@ -697,7 +769,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
               title: const Text('Қорда қолжетімді (Available)'),
               subtitle: const Text('Оқырмандар кітапханадан алып кете алады'),
               value: _isAvailable,
-              activeThumbColor: AppColors.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) => setState(() => _isAvailable = val),
             ),
 
@@ -706,7 +778,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
               title: const Text('e-Book қолжетімді'),
               subtitle: const Text('Электронды кітап қосымша ішінде ашылады'),
               value: _hasEBook,
-              activeThumbColor: AppColors.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) => setState(() => _hasEBook = val),
             ),
 
@@ -715,11 +787,31 @@ class _BookFormScreenState extends State<BookFormScreen> {
               title: const Text('Аудио нұсқасы бар'),
               subtitle: const Text('Оқырман аудиоплеерден тыңдай алады'),
               value: _hasAudio,
-              activeThumbColor: AppColors.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) => setState(() => _hasAudio = val),
             ),
 
             if (_hasAudio) ...[
+              TextFormField(
+                controller: _audioUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'MP3 сілтемесі (HTTPS)',
+                ),
+                validator: (value) {
+                  if (!_hasAudio) return null;
+                  final source = value?.trim() ?? '';
+                  if (source == 'asset:assets/audio/aesop_fox_grapes.mp3') {
+                    return null;
+                  }
+                  final uri = Uri.tryParse(source);
+                  return uri != null &&
+                          uri.scheme == 'https' &&
+                          uri.host.isNotEmpty &&
+                          uri.userInfo.isEmpty
+                      ? null
+                      : 'Қолжетімді HTTPS аудио сілтемесін енгізіңіз';
+                },
+              ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _audioDurationController,
@@ -737,13 +829,82 @@ class _BookFormScreenState extends State<BookFormScreen> {
               controller: _readingContentController,
               maxLines: 4,
               decoration: _inputDecoration(
-                label: 'Электронды оқуға арналған мәтін үзіндісі',
+                label: 'Кітап мәтіні (тараулар болмаса қолданылады)',
                 hint: 'Кітаптың 1-тарауы немесе бастапқы кіріспесі...',
                 icon: Icons.article_rounded,
                 isDark: isDark,
               ),
             ),
 
+            for (final editor in _chapterEditors)
+              Card(
+                key: ValueKey(editor.id),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: editor.title,
+                        decoration: const InputDecoration(
+                          labelText: 'Тарау атауы',
+                        ),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Тарау атауын енгізіңіз'
+                            : null,
+                      ),
+                      TextFormField(
+                        controller: editor.text,
+                        minLines: 3,
+                        maxLines: 8,
+                        decoration: const InputDecoration(
+                          labelText: 'Тарау мәтіні',
+                        ),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Тарау мәтінін енгізіңіз'
+                            : null,
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Тарауды жою'),
+                        onPressed: () {
+                          setState(() => _chapterEditors.remove(editor));
+                          WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => editor.dispose(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            TextButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Тарау қосу'),
+              onPressed: () => setState(() {
+                if (_chapterEditors.isEmpty &&
+                    _readingContentController.text.trim().isNotEmpty) {
+                  _chapterEditors.add(
+                    _ChapterEditor(
+                      BookChapter(
+                        id: 'legacy',
+                        title: '1-тарау',
+                        text: _readingContentController.text.trim(),
+                      ),
+                    ),
+                  );
+                  _readingContentController.clear();
+                }
+                _chapterEditors.add(
+                  _ChapterEditor(
+                    BookChapter(
+                      id: 'chapter_${DateTime.now().microsecondsSinceEpoch}',
+                      title: '',
+                      text: '',
+                    ),
+                  ),
+                );
+              }),
+            ),
             const SizedBox(height: 32),
 
             // Save Button
@@ -811,7 +972,11 @@ class _BookFormScreenState extends State<BookFormScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 20, color: AppColors.primaryLight),
+      prefixIcon: Icon(
+        icon,
+        size: 20,
+        color: Theme.of(context).colorScheme.primary,
+      ),
       filled: true,
       fillColor: isDark ? AppColors.surfaceDark : Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -829,7 +994,10 @@ class _BookFormScreenState extends State<BookFormScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
+        ),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),

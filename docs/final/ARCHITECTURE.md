@@ -25,6 +25,11 @@
 
 ## Деректер қоры және шекаралар
 
+Оқу/тыңдау кеңейтімі: `MediaProgressStore` жеке `media_progress.json` файлында
+chapterId/scrollFraction/audioMs сақтайды. `AudioPlaybackController` just_audio
+арқылы MP3 ойнатып, audio_session көмегімен аудио фокусты басқарады.
+Толық келісім мен офлайн демо дереккөздері `source/docs/READING_AUDIO.md` ішінде.
+
 PostgreSQL: `books(id TEXT PRIMARY KEY, data JSONB, updated_at TIMESTAMPTZ)`;
 `schema_migrations` seed-тің тек бір рет орындалуын қамтамасыз етеді.
 Жергілікті файл: кітаптар, авторлар, санаттар, оқырмандар, loans және reviews

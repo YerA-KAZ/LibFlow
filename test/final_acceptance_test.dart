@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,7 +19,7 @@ import 'package:libflow/services/auth_provider.dart';
 import 'package:libflow/services/library_api_service.dart';
 import 'package:libflow/services/library_database_service.dart';
 import 'package:libflow/services/library_repository.dart';
-import 'package:libflow/widgets/audio_player_sheet.dart';
+import 'package:libflow/widgets/qr_widget.dart';
 import 'package:provider/provider.dart';
 
 Book sampleBook() => Book.fromMap({
@@ -125,7 +126,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(find.text('Сәлем, Тест!'), findsOneWidget);
-    for (final label in ['Каталог', 'Таңдаулы', 'Профиль']) {
+    for (final label in ['Каталог', 'Броньдар', 'Профиль']) {
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle();
     }
@@ -155,6 +156,7 @@ void main() {
           onNavigateToMyBooks: () {},
         ),
       );
+      await tester.scrollUntilVisible(find.text('Бронь QR кодын тексеру'), 150);
       await tester.tap(find.text('Бронь QR кодын тексеру'));
       await tester.pumpAndSettle();
       expect(find.byType(QrScannerScreen), findsOneWidget);
@@ -201,47 +203,132 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('TC-N04 book detail opens editor, reader and audio sheet', (
-    tester,
-  ) async {
-    await mount(
-      tester,
-      Scaffold(
-        body: Builder(
-          builder: (context) => TextButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => BookDetailScreen(
-                  book: sampleBook(),
-                  onBookUpdated: (_) async => true,
+  testWidgets(
+    'TC-N04 book detail opens editor, reader and disables missing audio',
+    (tester) async {
+      await mount(
+        tester,
+        Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => BookDetailScreen(
+                    book: sampleBook(),
+                    staff: true,
+                    onBookUpdated: (_) async => true,
+                  ),
                 ),
               ),
+              child: const Text('Open detail'),
             ),
-            child: const Text('Open detail'),
           ),
         ),
+      );
+      await tester.tap(find.text('Open detail'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BookDetailScreen), findsOneWidget);
+      await tester.tap(find.byTooltip('Кітапты өңдеу'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BookFormScreen), findsOneWidget);
+      Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Оқуды бастау'), 140);
+      final readButton = find.widgetWithText(OutlinedButton, 'Оқуды бастау');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(readButton);
+      await tester.pumpAndSettle();
+      await tester.tap(readButton.hitTestable());
+      for (var i = 0; i < 20; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(EReaderScreen), findsOneWidget);
+      Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Аудио тыңдау'));
+      final audioButton = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Аудио тыңдау'),
+      );
+      expect(audioButton.onPressed, isNull);
+    },
+  );
+
+  testWidgets('a reservation ticket appears only after a successful save', (
+    tester,
+  ) async {
+    final pending = Completer<bool>();
+    Book? update;
+    await mount(
+      tester,
+      BookDetailScreen(
+        book: sampleBook(),
+        onBookUpdated: (book) {
+          update = book;
+          return pending.future;
+        },
       ),
     );
-    await tester.tap(find.text('Open detail'));
+    await tester.tap(find.text('Дананы брондау'));
+    await tester.pump();
+    expect(update?.availableCopies, 0);
+    expect(find.byType(CustomQrView), findsNothing);
+
+    pending.complete(true);
     await tester.pumpAndSettle();
-    expect(find.byType(BookDetailScreen), findsOneWidget);
-    await tester.tap(find.byTooltip('Кітапты өңдеу'));
-    await tester.pumpAndSettle();
-    expect(find.byType(BookFormScreen), findsOneWidget);
-    Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Оқуды бастау'));
-    await tester.tap(find.text('Оқуды бастау'));
-    await tester.pumpAndSettle();
-    expect(find.byType(EReaderScreen), findsOneWidget);
-    Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Аудио тыңдау'));
-    await tester.tap(find.text('Аудио тыңдау'));
-    await tester.pumpAndSettle();
-    expect(find.byType(AudioPlayerSheet), findsOneWidget);
+    expect(update?.hasActiveReservation, isTrue);
+    expect(
+      tester.widget<CustomQrView>(find.byType(CustomQrView)).data,
+      update?.reservationCode,
+    );
+    expect(find.text('Белсенді бронь'), findsOneWidget);
   });
+
+  testWidgets(
+    'external records and legacy reservations cannot produce a new QR',
+    (tester) async {
+      var writes = 0;
+      final book = sampleBook();
+      await mount(
+        tester,
+        BookDetailScreen(
+          book: book,
+          inCollection: false,
+          onBookUpdated: (_) async {
+            writes++;
+            return true;
+          },
+        ),
+      );
+      expect(find.text('Сыртқы каталог'), findsOneWidget);
+      expect(find.text('Дананы брондау'), findsNothing);
+      expect(find.byType(CustomQrView), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+
+      await mount(
+        tester,
+        BookDetailScreen(
+          book: book.copyWith(
+            isReserved: true,
+            reservationTime: DateTime.now(),
+          ),
+          onBookUpdated: (_) async {
+            writes++;
+            return true;
+          },
+        ),
+      );
+      await tester.tap(find.text('Бронь билеті'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CustomQrView), findsNothing);
+      expect(find.textContaining('алу коды тіркелмеген'), findsOneWidget);
+      expect(writes, 0);
+    },
+  );
 
   testWidgets('TC-N05 notifications use real local loans and reservations', (
     tester,

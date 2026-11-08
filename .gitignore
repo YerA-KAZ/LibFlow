@@ -52,5 +52,6 @@ backend/.venv/
 backend/.postgres/
 backend/.env
 /delivery/
+/android/.kotlin/
 backend/.pytest_cache/
 **/__pycache__/

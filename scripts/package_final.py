@@ -8,16 +8,16 @@ from shutil import copy2
 from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_DIRS = {'.git', '.dart_tool', '.gradle', '.cxx', '.idea', '.vscode',
+SKIP_DIRS = {'.git', '.dart_tool', '.gradle', '.kotlin', '.cxx', '.idea', '.vscode',
              '.venv', '.postgres', '__pycache__', '.pytest_cache', 'build',
              'ephemeral', 'Pods', '.symlinks', 'node_modules'}
 SKIP_FILES = {'.env', 'local.properties', 'key.properties',
               'Generated.xcconfig', 'flutter_export_environment.sh',
               '.flutter-plugins-dependencies', '.DS_Store'}
-SOURCE_DIRS = {'lib', 'test', 'integration_test', 'android', 'ios', 'linux',
+SOURCE_DIRS = {'assets', 'lib', 'test', 'integration_test', 'tool', 'android', 'ios', 'linux',
                'macos', 'windows', 'web', 'backend', 'docs', 'scripts'}
 SOURCE_FILES = {'README.md', 'pubspec.yaml', 'pubspec.lock', 'analysis_options.yaml',
-                'compose.yaml', '.gitignore', '.metadata', 'LICENSE'}
+                'compose.yaml', '.gitignore', '.metadata', 'LICENSE', 'run.bat'}
 
 
 def safe_source(path):
@@ -45,9 +45,9 @@ def assemble(apk):
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(path, destination)
     with ZipFile(target / 'LibFlow_source.zip', 'w', ZIP_DEFLATED) as archive:
-        for path in sorted(source.rglob('*')):
-            if path.is_file():
-                archive.write(path, 'LibFlow/' + path.relative_to(source).as_posix())
+        for original in sorted(files):
+            relative = original.relative_to(ROOT)
+            archive.write(source / relative, 'LibFlow/' + relative.as_posix())
     apk_target = target / 'apk' / 'LibFlow-1.0.0.apk'
     apk_target.parent.mkdir(exist_ok=True)
     copy2(apk, apk_target)
@@ -69,7 +69,7 @@ def assemble(apk):
     copy2(ROOT / 'docs' / 'final' / 'DELIVERY_README.md', target / 'README.md')
     entries = []
     for path in sorted(target.rglob('*')):
-        if path.is_file() and path.name != 'MANIFEST.json':
+        if path.is_file() and path.name != 'MANIFEST.json' and safe_source(path):
             entries.append({'path': path.relative_to(target).as_posix(),
                             'bytes': path.stat().st_size,
                             'sha256': hashlib.sha256(path.read_bytes()).hexdigest()})

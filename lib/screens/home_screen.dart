@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/book_model.dart';
-import '../utils/constants.dart';
+import '../widgets/audio_player_sheet.dart';
+import '../widgets/library_book_tile.dart';
 import 'book_detail_screen.dart';
+import 'ereader_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<Book> books;
@@ -10,6 +12,9 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onNavigateToCatalog;
   final VoidCallback onNavigateToMyBooks;
   final String readerName;
+  final Book? demoBook;
+  final bool loading;
+  final VoidCallback? onSearch;
 
   const HomeScreen({
     super.key,
@@ -18,622 +23,294 @@ class HomeScreen extends StatelessWidget {
     required this.onNavigateToCatalog,
     required this.onNavigateToMyBooks,
     this.readerName = 'Оқырман',
+    this.demoBook,
+    this.loading = false,
+    this.onSearch,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final readingBook = books.isNotEmpty
-        ? books.firstWhere(
-            (b) => b.isBorrowed || b.title.contains('Абай'),
-            orElse: () => books.first,
-          )
-        : null;
-
-    return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.backgroundDark
-          : AppColors.backgroundLight,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Сәлем, ${readerName.trim().isEmpty ? 'Оқырман' : readerName.trim().split(' ').first}!',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isDark
-                    ? AppColors.textPrimaryDark
-                    : AppColors.textPrimaryLight,
-                fontFamily: 'serif',
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Бүгін қандай кітап оқимыз?',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark
-                    ? AppColors.textSecondaryDark
-                    : AppColors.textSecondaryLight,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // Circular Avatar (A) as in Figma screen 06
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              radius: 19,
-              backgroundColor: isDark
-                  ? AppColors.surfaceDark
-                  : const Color(0xFFE5EDE8),
-              child: Text(
-                readerName.trim().isEmpty
-                    ? '?'
-                    : readerName.trim().characters.first,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Search Input Field matching Figma
-            GestureDetector(
-              onTap: onNavigateToCatalog,
-              child: Container(
-                margin: const EdgeInsets.only(top: 8, bottom: 20),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceDark : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark
-                        ? AppColors.borderDark
-                        : AppColors.borderLight,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.search_rounded,
-                      color: AppColors.textSecondaryLight,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Кітаптарды іздеу',
-                      style: TextStyle(
-                        color: isDark
-                            ? AppColors.textSecondaryDark
-                            : AppColors.textSecondaryLight,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Figma Hero Promo Banner: "АПТАНЫҢ ТАҢДАУЫ: Шабыт сыйлар кітаптар"
-            Container(
-              constraints: const BoxConstraints(minHeight: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withAlpha(60),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(30),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'АПТАНЫҢ ТАҢДАУЫ',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Шабыт сыйлар\nкітаптар',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          '20+ жаңа шығарма',
-                          style: TextStyle(color: Colors.white60, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Styled book preview on the right
-                  Transform.rotate(
-                    angle: 0.08,
-                    child: Container(
-                      width: 72,
-                      height: 98,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFC06C52),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black38,
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child:
-                            (books.isNotEmpty &&
-                                books.first.coverUrl != null &&
-                                books.first.coverUrl!.trim().isNotEmpty)
-                            ? Image.network(
-                                books.first.coverUrl!.trim(),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 32,
-                                      height: 32,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(0xFFD4A373),
-                                          width: 3,
-                                        ),
-                                      ),
-                                    ),
-                                    const Positioned(
-                                      bottom: 8,
-                                      child: Text(
-                                        'Абай\nжолы',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 8,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: const Color(0xFFD4A373),
-                                        width: 3,
-                                      ),
-                                    ),
-                                  ),
-                                  const Positioned(
-                                    bottom: 8,
-                                    child: Text(
-                                      'Абай\nжолы',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Section: Оқуды жалғастыру (Continue reading)
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  'Оқуды жалғастыру',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: isDark
-                        ? AppColors.textPrimaryDark
-                        : AppColors.textPrimaryLight,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onNavigateToMyBooks,
-                  child: const Row(
-                    children: [
-                      Text(
-                        'Барлығы',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryLight,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 14,
-                        color: AppColors.primaryLight,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Reading Progress Card
-            if (readingBook != null)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookDetailScreen(
-                        book: readingBook,
-                        onBookUpdated: onBookUpdated,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.surfaceDark : Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: isDark
-                          ? AppColors.borderDark
-                          : AppColors.borderLight,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      // Book mini cover
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: 52,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: readingBook.coverGradient,
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child:
-                              (readingBook.coverUrl != null &&
-                                  readingBook.coverUrl!.trim().isNotEmpty)
-                              ? Image.network(
-                                  readingBook.coverUrl!.trim(),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const Center(
-                                    child: Icon(
-                                      Icons.auto_stories,
-                                      color: Colors.white70,
-                                      size: 22,
-                                    ),
-                                  ),
-                                )
-                              : const Center(
-                                  child: Icon(
-                                    Icons.auto_stories,
-                                    color: Colors.white70,
-                                    size: 22,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              readingBook.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '45 / 190 бет • 24%',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? AppColors.textSecondaryDark
-                                    : AppColors.textSecondaryLight,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: 0.24,
-                                minHeight: 5,
-                                backgroundColor: isDark
-                                    ? Colors.white12
-                                    : const Color(0xFFE5EDE8),
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 28),
-
-            // Section: Сізге ұсынылады (Recommended for you)
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  'Сізге ұсынылады',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: isDark
-                        ? AppColors.textPrimaryDark
-                        : AppColors.textPrimaryLight,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onNavigateToCatalog,
-                  child: const Row(
-                    children: [
-                      Text(
-                        'Қарау',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryLight,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 14,
-                        color: AppColors.primaryLight,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // 2-column Figma Cards
-            Row(
-              children: [
-                Expanded(
-                  child: _buildFigmaBookItem(
-                    title: 'Көшпенділер',
-                    author: 'І. Есенберлин',
-                    rating: '4.8',
-                    coverColor: const Color(0xFF1E3347),
-                    isDark: isDark,
-                    onTap: () {
-                      final b = books.firstWhere(
-                        (b) => b.title.contains('Көшпенділер'),
-                        orElse: () => books[1],
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BookDetailScreen(
-                            book: b,
-                            onBookUpdated: onBookUpdated,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _buildFigmaBookItem(
-                    title: '1984',
-                    author: 'Джордж Оруэлл',
-                    rating: '4.8',
-                    coverColor: const Color(0xFF282B30),
-                    isDark: isDark,
-                    onTap: () {
-                      final b = books.firstWhere(
-                        (b) => b.title.contains('Қан мен тер'),
-                        orElse: () => books[2],
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BookDetailScreen(
-                            book: b,
-                            onBookUpdated: onBookUpdated,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-          ],
-        ),
+  void _openBook(BuildContext context, Book book) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            BookDetailScreen(book: book, onBookUpdated: onBookUpdated),
       ),
     );
   }
 
-  Widget _buildFigmaBookItem({
-    required String title,
-    required String author,
-    required String rating,
-    required Color coverColor,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Styled Figma Book Cover with Gold Circle
-            Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: coverColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFD4A373),
-                        width: 3,
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final name = readerName.trim();
+    final available = books
+        .where((book) => book.isAvailable && book.availableCopies > 0)
+        .toList();
+    final featured = available.firstOrNull;
+    final popular = books.where((book) => book.reviewCount > 0).toList()
+      ..sort((a, b) => b.reviewCount.compareTo(a.reviewCount));
+    final recentEditions = books.where((book) => book.publishYear > 0).toList()
+      ..sort((a, b) => b.publishYear.compareTo(a.publishYear));
+    final reserved = books.where((book) => book.hasActiveReservation).length;
+    final demo = demoBook;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_stories_outlined, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    Text('LibFlow', style: theme.textTheme.titleLarge),
+                    const Spacer(),
+                    CircleAvatar(
+                      child: Text(
+                        name.isEmpty
+                            ? '?'
+                            : name.characters.first.toUpperCase(),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 26),
+                Text(
+                  'КІТАПХАНА',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.primary,
+                    letterSpacing: 2.5,
+                    fontWeight: FontWeight.w700,
                   ),
-                  Positioned(
-                    bottom: 12,
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Сәлем, ${name.isEmpty ? 'Оқырман' : name.split(' ').first}!',
+                  style: theme.textTheme.displaySmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Кітапты табыңыз, брондаңыз және кітапханадан алыңыз.',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: onSearch ?? onNavigateToCatalog,
+                  icon: const Icon(Icons.search_rounded),
+                  label: const Text('Кітаптарды іздеу'),
+                  style: OutlinedButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: ListTile(
+                    onTap: onNavigateToMyBooks,
+                    leading: Icon(
+                      Icons.confirmation_number_outlined,
+                      color: scheme.primary,
+                    ),
+                    title: const Text('Менің броньдарым'),
+                    subtitle: Text(
+                      reserved == 0
+                          ? 'Белсенді бронь жоқ'
+                          : 'Белсенді бронь · $reserved',
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_rounded),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (featured != null)
+                  Card(
+                    color: const Color(0xFF282E54),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ҚОРДАН ҰСЫНЫС',
+                                  style: TextStyle(
+                                    color: Color(0xFFF2CEA6),
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.4,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  featured.title,
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(color: Colors.white),
+                                ),
+                                Text(
+                                  featured.author,
+                                  style: const TextStyle(
+                                    color: Color(0xFFE0E2F1),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFFF2CEA6),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () => _openBook(context, featured),
+                                  child: const Text('Кітапты қарау →'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          SizedBox(
+                            width: 82,
+                            child: LibraryBookCover(book: featured),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (books.isEmpty && !loading)
+                  const Card(
+                    child: ListTile(
+                      leading: Icon(Icons.shelves),
+                      title: Text('Каталог әзірге бос'),
+                    ),
+                  ),
+                if (popular.isNotEmpty)
+                  _Shelf(
+                    title: 'Танымал кітаптар',
+                    books: popular.take(6),
+                    onBookTap: (book) => _openBook(context, book),
+                  ),
+                if (recentEditions.isNotEmpty)
+                  _Shelf(
+                    title: 'Жаңа басылымдар',
+                    books: recentEditions.take(6),
+                    onBookTap: (book) => _openBook(context, book),
+                  ),
+                if (demo != null) ...[
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Оқу және аудио · демо',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          Text(demo.title),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              TextButton.icon(
+                                icon: const Icon(Icons.menu_book),
+                                label: const Text('Демо кітапты оқу'),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => EReaderScreen(book: demo),
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                icon: const Icon(Icons.headphones),
+                                label: const Text('Демо аудионы тыңдау'),
+                                onPressed: () => showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (_) => AudioPlayerSheet(book: demo),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark
-                    ? AppColors.textSecondaryDark
-                    : AppColors.textSecondaryLight,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(
-                  Icons.star_rounded,
-                  size: 14,
-                  color: Color(0xFFD4A373),
-                ),
-                const SizedBox(width: 3),
-                Text(
-                  rating,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
               ],
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _Shelf extends StatelessWidget {
+  const _Shelf({
+    required this.title,
+    required this.books,
+    required this.onBookTap,
+  });
+  final String title;
+  final Iterable<Book> books;
+  final ValueChanged<Book> onBookTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final book in books)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: SizedBox(
+                      width: 132,
+                      child: Card(
+                        child: InkWell(
+                          onTap: () => onBookTap(book),
+                          child: Padding(
+                            padding: const EdgeInsets.all(9),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                LibraryBookCover(book: book),
+                                const SizedBox(height: 8),
+                                Text(
+                                  book.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                                Text(
+                                  book.author,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

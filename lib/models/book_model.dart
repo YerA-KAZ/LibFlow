@@ -1,5 +1,24 @@
 import 'package:flutter/material.dart';
 
+class BookChapter {
+  final String id;
+  final String title;
+  final String text;
+  const BookChapter({
+    required this.id,
+    required this.title,
+    required this.text,
+  });
+  Map<String, dynamic> toMap() => {'id': id, 'title': title, 'text': text};
+  factory BookChapter.fromMap(Map<String, dynamic> map) => BookChapter(
+    id: map['id'] as String,
+    title: map['title'] as String,
+    text: map['text'] as String,
+  );
+}
+
+const _keepAudio = Object();
+
 class Book {
   final String id;
   final String title;
@@ -25,10 +44,28 @@ class Book {
   final bool hasAudio;
   final String audioDuration;
   final String readingContent;
+  final List<BookChapter> chapters;
+  final String? audioUrl;
+  List<BookChapter> get readableChapters =>
+      chapters.where((c) => c.text.trim().isNotEmpty).isNotEmpty
+      ? chapters.where((c) => c.text.trim().isNotEmpty).toList()
+      : readingContent.trim().isEmpty
+      ? []
+      : [BookChapter(id: 'legacy', title: title, text: readingContent)];
+  bool get canRead => hasEBook && readableChapters.isNotEmpty;
+  bool get canListen =>
+      hasAudio && audioUrl != null && audioUrl!.trim().isNotEmpty;
   bool isFavorite;
   bool isReserved;
   DateTime? reservationTime;
   String? reservationCode;
+  bool get hasActiveReservation {
+    final time = reservationTime;
+    return isReserved &&
+        time != null &&
+        DateTime.now().isBefore(time.add(const Duration(hours: 24)));
+  }
+
   bool isBorrowed;
   DateTime? dueDate;
 
@@ -57,6 +94,8 @@ class Book {
     this.hasAudio = false,
     this.audioDuration = '',
     required this.readingContent,
+    this.chapters = const [],
+    this.audioUrl,
     this.isFavorite = false,
     this.isReserved = false,
     this.reservationTime,
@@ -91,6 +130,8 @@ class Book {
     bool? hasAudio,
     String? audioDuration,
     String? readingContent,
+    List<BookChapter>? chapters,
+    Object? audioUrl = _keepAudio,
     String? coverUrl,
     String? source,
     String? previewUrl,
@@ -123,6 +164,10 @@ class Book {
       hasAudio: hasAudio ?? this.hasAudio,
       audioDuration: audioDuration ?? this.audioDuration,
       readingContent: readingContent ?? this.readingContent,
+      chapters: chapters ?? this.chapters,
+      audioUrl: identical(audioUrl, _keepAudio)
+          ? this.audioUrl
+          : audioUrl as String?,
       isFavorite: isFavorite ?? this.isFavorite,
       isReserved: isReserved ?? this.isReserved,
       reservationTime: isReserved == false
@@ -162,6 +207,8 @@ class Book {
       'hasAudio': hasAudio ? 1 : 0,
       'audioDuration': audioDuration,
       'readingContent': readingContent,
+      'chapters': chapters.map((c) => c.toMap()).toList(),
+      'audioUrl': audioUrl,
       'isFavorite': isFavorite ? 1 : 0,
       'isReserved': isReserved ? 1 : 0,
       'reservationTime': reservationTime?.toIso8601String(),
@@ -211,6 +258,10 @@ class Book {
       hasAudio: (map['hasAudio'] == 1 || map['hasAudio'] == true),
       audioDuration: map['audioDuration'] ?? '',
       readingContent: map['readingContent'] ?? '',
+      chapters: (map['chapters'] as List? ?? [])
+          .map((c) => BookChapter.fromMap(Map<String, dynamic>.from(c as Map)))
+          .toList(),
+      audioUrl: map['audioUrl'] as String?,
       isFavorite: (map['isFavorite'] == 1 || map['isFavorite'] == true),
       isReserved: (map['isReserved'] == 1 || map['isReserved'] == true),
       reservationTime: map['reservationTime'] != null
@@ -243,17 +294,17 @@ class Book {
         : 'Жалпы әдебиет';
 
     // Page count
-    final pages = (volumeInfo['pageCount'] as num?)?.toInt() ?? 250;
+    final pages = (volumeInfo['pageCount'] as num?)?.toInt() ?? 0;
 
     // Year
-    int publishYear = 2022;
+    int publishYear = 0;
     final publishedDate = volumeInfo['publishedDate'] as String?;
     if (publishedDate != null && publishedDate.length >= 4) {
-      publishYear = int.tryParse(publishedDate.substring(0, 4)) ?? 2022;
+      publishYear = int.tryParse(publishedDate.substring(0, 4)) ?? 0;
     }
 
     // ISBN
-    String isbn = 'ISBN-жоқ';
+    String isbn = '';
     final identifiers = volumeInfo['industryIdentifiers'] as List<dynamic>?;
     if (identifiers != null) {
       for (var iden in identifiers) {
@@ -265,13 +316,11 @@ class Book {
     }
 
     // Rating
-    final rating = (volumeInfo['averageRating'] as num?)?.toDouble() ?? 4.5;
-    final reviewCount = (volumeInfo['ratingsCount'] as num?)?.toInt() ?? 18;
+    final rating = (volumeInfo['averageRating'] as num?)?.toDouble() ?? 0;
+    final reviewCount = (volumeInfo['ratingsCount'] as num?)?.toInt() ?? 0;
 
     // Description
-    final description =
-        volumeInfo['description'] as String? ??
-        'Бұл кітап Google Books API деректер базасынан алынған. Толық мазмұнын онлайн қарап шығуға болады.';
+    final description = volumeInfo['description'] as String? ?? '';
 
     // Images
     final imageLinks = volumeInfo['imageLinks'] as Map<String, dynamic>?;
@@ -313,21 +362,12 @@ class Book {
       source: 'Google Books',
       previewUrl: previewUrl,
       infoUrl: infoUrl,
-      isAvailable: true,
-      availableCopies: 3,
-      totalCopies: 4,
-      hasEBook: true,
+      isAvailable: false,
+      availableCopies: 0,
+      totalCopies: 0,
+      hasEBook: false,
       hasAudio: false,
-      readingContent:
-          '''$title
-
-Автор: $author
-Дереккөз: Google Books API
-
-КІТАПҚА ШОЛУ:
-$description
-
-(Толық мәтінді Google Books ресми сайтынан қарап шығуға болады)''',
+      readingContent: '',
     );
   }
 
@@ -349,20 +389,20 @@ $description
         : 'Әдебиет';
 
     // Page count
-    final pages = (json['number_of_pages_median'] as num?)?.toInt() ?? 280;
+    final pages = (json['number_of_pages_median'] as num?)?.toInt() ?? 0;
 
     // Year
-    final publishYear = (json['first_publish_year'] as num?)?.toInt() ?? 2020;
+    final publishYear = (json['first_publish_year'] as num?)?.toInt() ?? 0;
 
     // ISBN
-    String isbn = 'ISBN-жоқ';
+    String isbn = '';
     final isbnList = json['isbn'] as List<dynamic>?;
     if (isbnList != null && isbnList.isNotEmpty) {
       isbn = isbnList.first.toString();
     }
 
     // Rating
-    final rating = (json['ratings_average'] as num?)?.toDouble() ?? 4.6;
+    final rating = (json['ratings_average'] as num?)?.toDouble() ?? 0;
 
     // Cover image
     final coverId = json['cover_i'];
@@ -387,32 +427,21 @@ $description
       author: author,
       category: category,
       rating: double.parse(rating.toStringAsFixed(1)),
-      reviewCount: (json['edition_count'] as num?)?.toInt() ?? 12,
+      reviewCount: (json['ratings_count'] as num?)?.toInt() ?? 0,
       pages: pages,
       publishYear: publishYear,
       isbn: isbn,
-      description:
-          'Бұл кітап Open Library әлемдік ашық цифрлық кітапхана қорынан табылды. Басылымдар саны: ${(json['edition_count'] ?? 1)}. Кілт сөзі: $key.',
+      description: '',
       coverGradient: colorPair,
       coverUrl: coverUrl,
       source: 'Open Library',
       infoUrl: infoUrl,
-      isAvailable: true,
-      availableCopies: 2,
-      totalCopies: 3,
-      hasEBook: true,
+      isAvailable: false,
+      availableCopies: 0,
+      totalCopies: 0,
+      hasEBook: false,
       hasAudio: false,
-      readingContent:
-          '''$title
-
-Автор: $author
-Басылым жылы: $publishYear
-Дереккөз: Open Library (Internet Archive)
-
-МАЗМҰНЫ:
-Бұл туынды ашық цифрлық кітапхана каталогында индекстелген. Оны Open Library веб-платформасы арқылы толық көруге болады.
-
-Сілтеме: $infoUrl''',
+      readingContent: '',
     );
   }
 }

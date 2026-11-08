@@ -1,15 +1,25 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/book_model.dart';
-import '../services/dummy_books.dart';
+
+import 'package:provider/provider.dart';
+
+import '../services/auth_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/audio_player_sheet.dart';
-import '../widgets/qr_widget.dart';
+import '../widgets/library_book_tile.dart';
+import '../widgets/reservation_ticket.dart';
 import 'book_form_screen.dart';
 import 'ereader_screen.dart';
 
 class BookDetailScreen extends StatefulWidget {
   final Book book;
+  final bool inCollection;
+  final bool staff;
+  final Future<bool> Function(Book)? onBookAdded;
   final Future<bool> Function(Book updatedBook) onBookUpdated;
   final Future<bool> Function(String bookId)? onBookDeleted;
 
@@ -18,6 +28,9 @@ class BookDetailScreen extends StatefulWidget {
     required this.book,
     required this.onBookUpdated,
     this.onBookDeleted,
+    this.onBookAdded,
+    this.inCollection = true,
+    this.staff = false,
   });
 
   @override
@@ -37,7 +50,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  final List<BookReview> _reviews = DummyDataService.getSampleReviews();
+  final List<BookReview> _reviews = [];
 
   @override
   void initState() {
@@ -119,7 +132,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   Future<void> _reserveBook() async {
     if (_isMutating) return;
-    if (!_book.isAvailable || _book.availableCopies <= 0) {
+    if (!widget.inCollection ||
+        _book.isReserved ||
+        _book.isBorrowed ||
+        !_book.isAvailable ||
+        _book.availableCopies <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Бұл кітап қазір қорда жоқ!'),
@@ -128,7 +145,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       );
       return;
     }
-    final code = 'LIBFLOW-${DateTime.now().millisecondsSinceEpoch}';
+    final random = Random.secure();
+    final suffix = List.generate(
+      4,
+      (_) => random.nextInt(0x10000).toRadixString(16).padLeft(4, '0'),
+    ).join().toUpperCase();
+    final code = 'LIBFLOW-$suffix';
     final updated = _book.copyWith(
       isReserved: true,
       reservationTime: DateTime.now(),
@@ -147,57 +169,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       return;
     }
 
-    // Show Reservation Modal with QR Code
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: AppColors.success, size: 28),
-            SizedBox(width: 10),
-            Text('Брондау сәтті аяқталды!', style: TextStyle(fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Кітап сізге 24 сағатқа брондалды. Кітапханаға барып, кітапханашыға осы QR-кодты көрсетіңіз:',
-              style: TextStyle(fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            CustomQrView(data: code, size: 180),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Бронь коды: $code',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Жабу',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
+    await showReservationTicket(context, _book);
   }
 
   void _showAddReviewDialog() {
@@ -274,7 +246,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       0,
                       BookReview(
                         id: DateTime.now().toString(),
-                        userName: 'Ернұр Асқаров',
+                        userName:
+                            context.read<AuthProvider?>()?.user?['name']
+                                as String? ??
+                            'Оқырман',
                         rating: selectedRating,
                         date: 'Бүгін',
                         comment: textController.text.trim(),
@@ -297,591 +272,260 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  Widget _buildDetailCover() {
-    final coverUrl = _book.coverUrl?.trim();
-    final hasCover = coverUrl != null && coverUrl.isNotEmpty;
-
-    return Container(
-      width: 135,
-      height: 195,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(100),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: hasCover
-            ? Image.network(
-                coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _buildFallbackCover(),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      _buildFallbackCover(),
-                      Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          value: progress.expectedTotalBytes != null
-                              ? progress.cumulativeBytesLoaded /
-                                    progress.expectedTotalBytes!
-                              : null,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              )
-            : _buildFallbackCover(),
-      ),
-    );
-  }
-
-  Widget _buildFallbackCover() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _book.coverGradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFD4A373), width: 3.5),
-            ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: Color(0xFFD4A373),
-              size: 24,
-            ),
-          ),
-          Positioned(
-            bottom: 16,
-            left: 8,
-            right: 8,
-            child: Text(
-              _book.title,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final inCollection = widget.inCollection;
+    final available =
+        !_book.isBorrowed && _book.isAvailable && _book.availableCopies > 0;
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.backgroundDark
-          : AppColors.backgroundLight,
-      body: CustomScrollView(
-        slivers: [
-          // Collapsible App Bar with Forest Green Cover Container matching Figma 08
-          SliverAppBar(
-            expandedHeight: 330,
-            pinned: true,
-            backgroundColor: AppColors.primary,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(40),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              onPressed: () => Navigator.pop(context),
+      appBar: AppBar(
+        title: Text(widget.staff ? 'Қордағы кітап' : 'Кітап туралы'),
+        actions: [
+          if (inCollection && widget.staff) ...[
+            IconButton(
+              tooltip: 'Кітапты өңдеу',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: _isMutating ? null : _editBook,
             ),
-            actions: [
+            if (widget.onBookDeleted != null)
               IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(40),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.edit_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                tooltip: 'Кітапты өңдеу',
-                onPressed: () async {
-                  final updated = await Navigator.push<Book>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => BookFormScreen(
-                        book: _book,
-                        onSave: widget.onBookUpdated,
-                      ),
-                    ),
-                  );
-                  if (mounted && updated != null) {
-                    setState(() {
-                      _book = updated;
-                    });
-                  }
-                },
-              ),
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withAlpha(50),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
                 tooltip: 'Кітапты өшіру',
-                onPressed: _confirmDeleteBook,
+                icon: const Icon(Icons.delete_outline),
+                onPressed: _isMutating ? null : _confirmDeleteBook,
               ),
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(40),
-                    shape: BoxShape.circle,
+          ],
+          if (inCollection && !widget.staff)
+            IconButton(
+              tooltip: _book.isFavorite
+                  ? 'Таңдаулыдан алып тастау'
+                  : 'Таңдаулыға қосу',
+              icon: Icon(
+                _book.isFavorite ? Icons.favorite : Icons.favorite_border,
+              ),
+              onPressed: _isMutating ? null : _toggleFavorite,
+            ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: [
+              Card(
+                color: scheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 24,
+                    horizontal: 20,
                   ),
-                  child: Icon(
-                    _book.isFavorite ? Icons.favorite : Icons.favorite_border,
-                    color: _book.isFavorite ? Colors.redAccent : Colors.white,
-                    size: 20,
+                  child: Center(
+                    child: SizedBox(
+                      width: 124,
+                      child: LibraryBookCover(book: _book),
+                    ),
                   ),
                 ),
-                onPressed: _toggleFavorite,
               ),
-              const SizedBox(width: 8),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
+              const SizedBox(height: 20),
+              Text(_book.title, style: theme.textTheme.displaySmall),
+              const SizedBox(height: 4),
+              Text(
+                _book.author,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.primary, AppColors.primaryDark],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                  if (_book.coverUrl != null &&
-                      _book.coverUrl!.trim().isNotEmpty)
-                    Opacity(
-                      opacity: 0.15,
-                      child: Image.network(
-                        _book.coverUrl!.trim(),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const SizedBox(),
-                      ),
-                    ),
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 36),
-                        _buildDetailCover(),
-                      ],
-                    ),
-                  ),
+                  BookAvailability(book: _book, inCollection: inCollection),
+                  if (_book.category.isNotEmpty) Text(_book.category),
+                  if (_book.publishYear > 0) Text('· ${_book.publishYear}'),
+                  if (_book.pages > 0) Text('· ${_book.pages} бет'),
                 ],
               ),
-            ),
-          ),
-
-          // Book Details Content
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title & Author
-                  Text(
-                    _book.title,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+              const SizedBox(height: 18),
+              Card(
+                child: ListTile(
+                  leading: Icon(
+                    inCollection ? Icons.local_library_outlined : Icons.public,
+                    color: scheme.primary,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _book.author,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondaryLight,
-                    ),
+                  title: Text(inCollection ? 'Қағаз дана' : _book.source),
+                  subtitle: Text(
+                    !inCollection
+                        ? 'Бұл дереккөз кітапханадағы даналар туралы ақпарат бермейді.'
+                        : widget.staff
+                        ? 'Қолда бар дана: ${_book.availableCopies} / ${_book.totalCopies}'
+                        : _book.isReserved
+                        ? (_book.hasActiveReservation
+                              ? 'Кітап сізге брондалған.'
+                              : 'Бронь мерзімі аяқталған.')
+                        : _book.isBorrowed
+                        ? 'Бұл кітап сізге берілген.'
+                        : available
+                        ? 'Брондалған дананы 24 сағат ішінде кітапханадан алыңыз.'
+                        : 'Брондауға қолжетімді дана жоқ.',
                   ),
-                  const SizedBox(height: 16),
-
-                  // Figma 08: Rating, Pages, Language row
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        color: Color(0xFFD4A373),
-                        size: 18,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_book.rating}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text('Кітап туралы', style: theme.textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text(
+                _book.description.trim().isEmpty
+                    ? 'Сипаттама әзірге жоқ.'
+                    : _book.description,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+              ),
+              if (_book.isbn.trim().isNotEmpty && _book.isbn != 'ISBN-жоқ') ...[
+                const SizedBox(height: 10),
+                Text('ISBN ${_book.isbn}', style: theme.textTheme.bodySmall),
+              ],
+              if (!inCollection && (_book.previewUrl ?? _book.infoUrl) != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.link),
+                    label: const Text('Дереккөз сілтемесін көшіру'),
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(
+                          text: (_book.previewUrl ?? _book.infoUrl)!,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('•', style: TextStyle(color: Colors.grey)),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_book.pages} бет',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.textSecondaryDark
-                              : AppColors.textSecondaryLight,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('•', style: TextStyle(color: Colors.grey)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Қазақша',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.textSecondaryDark
-                              : AppColors.textSecondaryLight,
-                        ),
-                      ),
-                    ],
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Сілтеме көшірілді.')),
+                      );
+                    },
                   ),
-                  const SizedBox(height: 16),
-
-                  // Figma 08 Genre Tags: Классика, Роман
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white10
-                              : const Color(0xFFF0ECE3),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'Классика',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white70
-                                : AppColors.textPrimaryLight,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white10
-                              : const Color(0xFFF0ECE3),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'Роман',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white70
-                                : AppColors.textPrimaryLight,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Section Title: Кітап туралы
-                  const Text(
-                    'Кітап туралы',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _book.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Prominent Figma 08 Action Button: "Оқуды бастау ->"
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EReaderScreen(book: _book),
-                          ),
-                        );
-                      },
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Оқуды бастау',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward_rounded, size: 18),
-                        ],
+                ),
+              if (_book.canRead || _book.hasAudio) ...[
+                const SizedBox(height: 24),
+                Text('Танысуға арналған', style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 10),
+                if (_book.canRead)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => EReaderScreen(book: _book),
                       ),
                     ),
+                    icon: const Icon(Icons.menu_book_outlined),
+                    label: const Text('Оқуды бастау'),
                   ),
-                  if (_book.hasAudio) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.accent,
-                          side: const BorderSide(
-                            color: AppColors.accent,
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        icon: const Icon(Icons.headphones_rounded),
-                        label: const Text(
-                          'Аудио тыңдау',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () {
-                          showModalBottomSheet(
+                if (_book.hasAudio)
+                  OutlinedButton.icon(
+                    onPressed: !_book.canListen
+                        ? null
+                        : () => showModalBottomSheet<void>(
                             context: context,
                             isScrollControlled: true,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(28),
-                              ),
-                            ),
                             builder: (_) => AudioPlayerSheet(book: _book),
-                          );
-                        },
-                      ),
+                          ),
+                    icon: const Icon(Icons.headphones_outlined),
+                    label: const Text('Аудио тыңдау'),
+                  ),
+              ],
+              if (inCollection && !widget.staff) ...[
+                const SizedBox(height: 24),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'Пікірлер · осы сеанс',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    TextButton(
+                      onPressed: _showAddReviewDialog,
+                      child: const Text('Пікір жазу'),
                     ),
                   ],
-                  const SizedBox(height: 24),
-
-                  // Physical Library Reservation Section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.surfaceDark : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? AppColors.borderDark
-                            : AppColors.borderLight,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.storefront_rounded,
-                              color: AppColors.primaryLight,
-                            ),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text(
-                                'Кітапханадан физикалық алу',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                            if (_book.isReserved) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warning.withAlpha(30),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'Брондалған',
-                                  style: TextStyle(
-                                    color: AppColors.warning,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Кітапты онлайн брондап, 24 сағат ішінде QR-кодпен кітапханадан кезексіз алыңыз.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _book.isReserved
-                                  ? Colors.grey
-                                  : AppColors.accent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(Icons.qr_code_2_rounded),
-                            label: Text(
-                              _book.isReserved
-                                  ? 'Брондау коды сақталды'
-                                  : 'Қазір брондау (24 сағат)',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            onPressed: _book.isReserved ? null : _reserveBook,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Description
-                  const Text(
-                    'Кітап туралы мәлімет',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _book.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: isDark
-                          ? AppColors.textSecondaryDark
-                          : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'ISBN: ${_book.isbn}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Reviews section
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Оқырмандар пікірлері',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('Пікір жазу'),
-                        onPressed: _showAddReviewDialog,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ..._reviews.map((r) => _buildReviewTile(r, isDark)),
-                  const SizedBox(height: 30),
-                ],
-              ),
-            ),
+                ),
+                ..._reviews.map((review) => _buildReviewTile(review, isDark)),
+              ],
+            ],
           ),
-        ],
+        ),
+      ),
+      bottomNavigationBar:
+          (inCollection && !widget.staff) ||
+              (!inCollection && widget.staff && widget.onBookAdded != null)
+          ? BottomAppBar(
+              height: 76,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: Icon(
+                        _book.isReserved
+                            ? Icons.qr_code_2
+                            : Icons.confirmation_number_outlined,
+                      ),
+                      label: Text(
+                        !inCollection
+                            ? 'Қорға қосу'
+                            : _isMutating
+                            ? 'Сақталуда…'
+                            : _book.isReserved
+                            ? 'Бронь билеті'
+                            : _book.isBorrowed
+                            ? 'Бұл кітап сізге берілген.'
+                            : available
+                            ? 'Дананы брондау'
+                            : 'Дана қолжетімсіз',
+                      ),
+                      onPressed: _isMutating
+                          ? null
+                          : !inCollection
+                          ? _importBook
+                          : _book.isReserved
+                          ? () => showReservationTicket(context, _book)
+                          : available
+                          ? _reserveBook
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  Future<void> _editBook() async {
+    final updated = await Navigator.push<Book>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            BookFormScreen(book: _book, onSave: widget.onBookUpdated),
+      ),
+    );
+    if (mounted && updated != null) setState(() => _book = updated);
+  }
+
+  void _importBook() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<Book>(
+        builder: (_) => BookFormScreen(
+          book: _book,
+          onSave: widget.onBookAdded!,
+          importing: true,
+        ),
       ),
     );
   }

@@ -37,7 +37,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             type: 'deadline',
           ),
       for (final book in widget.books)
-        if (book.isReserved)
+        if (book.hasActiveReservation)
           AppNotification(
             id: 'reserved_${book.id}',
             title: 'Белсенді бронь',

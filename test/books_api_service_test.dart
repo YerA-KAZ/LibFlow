@@ -17,14 +17,12 @@ void main() {
           'ratingsCount': 85,
           'description': 'A guide to building mobile apps with Flutter.',
           'industryIdentifiers': [
-            {'type': 'ISBN_13', 'identifier': '9781617296147'}
+            {'type': 'ISBN_13', 'identifier': '9781617296147'},
           ],
-          'imageLinks': {
-            'thumbnail': 'http://books.google.com/thumbnail.jpg',
-          },
+          'imageLinks': {'thumbnail': 'http://books.google.com/thumbnail.jpg'},
           'previewLink': 'https://books.google.com/preview',
           'infoLink': 'https://books.google.com/info',
-        }
+        },
       };
 
       final book = Book.fromGoogleBooks(googleJson);
@@ -35,6 +33,8 @@ void main() {
       expect(book.publishYear, 2020);
       expect(book.isbn, '9781617296147');
       expect(book.source, 'Google Books');
+      expect(book.availableCopies, 0);
+      expect(book.canRead, isFalse);
       expect(book.coverUrl, 'https://books.google.com/thumbnail.jpg');
     });
 
@@ -59,14 +59,23 @@ void main() {
       expect(book.pages, 432);
       expect(book.isbn, '9780134494166');
       expect(book.source, 'Open Library');
-      expect(book.coverUrl, 'https://covers.openlibrary.org/b/id/8234125-M.jpg');
+      expect(book.availableCopies, 0);
+      expect(book.canRead, isFalse);
+      expect(
+        book.coverUrl,
+        'https://covers.openlibrary.org/b/id/8234125-M.jpg',
+      );
     });
 
     test('BooksApiService URL and configuration', () {
-      expect(BooksApiService.googleBooksBaseUrl,
-          'https://www.googleapis.com/books/v1/volumes');
-      expect(BooksApiService.openLibraryBaseUrl,
-          'https://openlibrary.org/search.json');
+      expect(
+        BooksApiService.googleBooksBaseUrl,
+        'https://www.googleapis.com/books/v1/volumes',
+      );
+      expect(
+        BooksApiService.openLibraryBaseUrl,
+        'https://openlibrary.org/search.json',
+      );
     });
   });
 }

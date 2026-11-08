@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../utils/constants.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -193,7 +194,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   ),
                                 ),
                                 child: const Text(
-                                  'Онлайн кітапхана & e-Reader',
+                                  AppConstants.appTagline,
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,

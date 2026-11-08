@@ -1,248 +1,148 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../models/book_model.dart';
-import '../utils/constants.dart';
+import '../services/audio_playback_controller.dart';
 
 class AudioPlayerSheet extends StatefulWidget {
   final Book book;
-
-  const AudioPlayerSheet({super.key, required this.book});
-
+  final AudioPlaybackController? controller;
+  const AudioPlayerSheet({super.key, required this.book, this.controller});
   @override
   State<AudioPlayerSheet> createState() => _AudioPlayerSheetState();
 }
 
-class _AudioPlayerSheetState extends State<AudioPlayerSheet> {
-  bool _isPlaying = true;
-  double _currentSeconds = 120;
-  final double _totalSeconds = 1800; // 30 minutes sample chapter
-  double _speed = 1.0;
-
-  String _formatTime(double seconds) {
-    final int minutes = (seconds / 60).floor();
-    final int remainingSeconds = (seconds % 60).floor();
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+class _AudioPlayerSheetState extends State<AudioPlayerSheet>
+    with WidgetsBindingObserver {
+  late final AudioPlaybackController player;
+  String time(Duration v) =>
+      '${v.inMinutes}:${(v.inSeconds % 60).toString().padLeft(2, '0')}';
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    player = widget.controller ?? AudioPlaybackController(book: widget.book);
+    unawaited(player.initialize());
   }
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) unawaited(player.pause());
+  }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[400],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    player.dispose();
+    super.dispose();
+  }
 
-          // Album art / Cover
-          Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: widget.book.coverGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.book.coverGradient.first.withAlpha(100),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: AnimatedBuilder(
+      animation: player,
+      builder: (context, _) => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.headphones_rounded, size: 48),
+            Text(
+              widget.book.title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            child: const Center(
-              child: Icon(
-                Icons.headphones_rounded,
-                size: 60,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Book Title & Author
-          Text(
-            widget.book.title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.book.author,
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark
-                  ? AppColors.textSecondaryDark
-                  : AppColors.textSecondaryLight,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Chapter tag
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(isDark ? 50 : 25),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              '1-тарау • Дыбысталуы: 14 сағ 20 мин',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primaryLight,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Slider
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              activeTrackColor: AppColors.accent,
-              inactiveTrackColor: Colors.grey.withAlpha(80),
-              thumbColor: AppColors.accent,
-            ),
-            child: Slider(
-              value: _currentSeconds,
-              min: 0,
-              max: _totalSeconds,
-              onChanged: (value) {
-                setState(() {
-                  _currentSeconds = value;
-                });
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _formatTime(_currentSeconds),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  _formatTime(_totalSeconds),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Controls
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Speed button
+            Text(widget.book.author),
+            if (player.loading) const LinearProgressIndicator(),
+            if (player.error != null) ...[
+              Text(player.error!, key: const Key('audio-error')),
               TextButton(
-                onPressed: () {
-                  setState(() {
-                    if (_speed == 1.0) {
-                      _speed = 1.25;
-                    } else if (_speed == 1.25) {
-                      _speed = 1.5;
-                    } else if (_speed == 1.5) {
-                      _speed = 2.0;
-                    } else {
-                      _speed = 1.0;
-                    }
-                  });
-                },
-                child: Text(
-                  '${_speed}x',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryLight,
-                  ),
-                ),
-              ),
-
-              // Replay 15s
-              IconButton(
-                iconSize: 32,
-                icon: const Icon(Icons.replay_10_rounded),
-                onPressed: () {
-                  setState(() {
-                    _currentSeconds = (_currentSeconds - 10).clamp(0, _totalSeconds);
-                  });
-                },
-              ),
-
-              // Play / Pause FAB
-              Container(
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.accent, Colors.orangeAccent],
-                  ),
-                ),
-                child: IconButton(
-                  iconSize: 40,
-                  color: Colors.white,
-                  icon: Icon(_isPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded),
-                  onPressed: () {
-                    setState(() {
-                      _isPlaying = !_isPlaying;
-                    });
-                  },
-                ),
-              ),
-
-              // Forward 15s
-              IconButton(
-                iconSize: 32,
-                icon: const Icon(Icons.forward_10_rounded),
-                onPressed: () {
-                  setState(() {
-                    _currentSeconds = (_currentSeconds + 10).clamp(0, _totalSeconds);
-                  });
-                },
-              ),
-
-              // Bookmark
-              IconButton(
-                iconSize: 24,
-                icon: const Icon(Icons.bookmark_add_outlined),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Бетбелгі сақталды!'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                },
+                onPressed: player.initialize,
+                child: const Text('Қайта көру'),
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-        ],
+            if (player.progressError != null) Text(player.progressError!),
+            if (player.resumePosition != null)
+              FilledButton.tonal(
+                onPressed: player.resume,
+                child: Text(
+                  '${time(player.resumePosition!)} жерінен жалғастыру',
+                ),
+              ),
+            Slider(
+              key: const Key('audio-seek'),
+              value: player.position.inMilliseconds.toDouble().clamp(
+                0,
+                player.duration.inMilliseconds.toDouble(),
+              ),
+              max: player.duration.inMilliseconds > 0
+                  ? player.duration.inMilliseconds.toDouble()
+                  : 1,
+              onChanged:
+                  player.loading ||
+                      player.error != null ||
+                      player.duration == Duration.zero
+                  ? null
+                  : (value) =>
+                        player.seek(Duration(milliseconds: value.round())),
+            ),
+            Text(
+              '${time(player.position)} / ${time(player.duration)}',
+              key: const Key('audio-time'),
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: '10 секунд артқа',
+                  icon: const Icon(Icons.replay_10),
+                  onPressed: player.loading || player.error != null
+                      ? null
+                      : () => player.seek(
+                          player.position - const Duration(seconds: 10),
+                        ),
+                ),
+                IconButton.filled(
+                  tooltip: player.playing ? 'Кідірту' : 'Ойнату',
+                  icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
+                  iconSize: 38,
+                  onPressed: player.loading || player.error != null
+                      ? null
+                      : () => player.playing ? player.pause() : player.play(),
+                ),
+                IconButton(
+                  tooltip: '10 секунд алға',
+                  icon: const Icon(Icons.forward_10),
+                  onPressed: player.loading || player.error != null
+                      ? null
+                      : () => player.seek(
+                          player.position + const Duration(seconds: 10),
+                        ),
+                ),
+                DropdownButton<double>(
+                  value: player.speed,
+                  items: [0.75, 1.0, 1.25, 1.5, 2.0]
+                      .map(
+                        (s) => DropdownMenuItem(value: s, child: Text('${s}x')),
+                      )
+                      .toList(),
+                  onChanged: player.loading || player.error != null
+                      ? null
+                      : (v) => player.changeSpeed(v!),
+                ),
+              ],
+            ),
+            if (player.completed)
+              const Text('Аудио аяқталды. Қайта тыңдау үшін Ойнату басыңыз.'),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Жабу'),
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
