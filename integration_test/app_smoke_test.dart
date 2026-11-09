@@ -7,7 +7,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:libflow/main.dart' as app;
 import 'package:libflow/screens/auth_screen.dart';
 import 'package:libflow/screens/profile_screen.dart';
-import 'package:libflow/screens/qr_scanner_screen.dart';
 import 'package:libflow/services/auth_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -24,7 +23,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Android registration, navigation, REST/realtime, scanner and login/logout',
+    'Android reader registration, navigation, permission checks and login/logout',
     (tester) async {
       await app.main();
       await waitFor(
@@ -80,58 +79,28 @@ void main() {
         'API_BASE_URL',
         defaultValue: 'http://10.0.2.2:8000',
       );
-      final id = 'device_$suffix';
-      final title = 'Device realtime $suffix';
-      final payload = {
-        'id': id,
-        'title': title,
-        'author': 'Device test',
-        'totalCopies': 1,
-        'availableCopies': 1,
-      };
-      try {
-        final created = await http.post(
-          Uri.parse('$api/api/books'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(payload),
-        );
-        expect(created.statusCode, 201);
-        await waitFor(tester, () => find.text(title).evaluate().isNotEmpty);
-        expect(find.text(title), findsWidgets);
-        final updated = await http.put(
-          Uri.parse('$api/api/books/$id'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({...payload, 'title': '$title updated'}),
-        );
-        expect(updated.statusCode, 200);
-        await waitFor(
-          tester,
-          () => find.text('$title updated').evaluate().isNotEmpty,
-        );
-        final deleted = await http.delete(Uri.parse('$api/api/books/$id'));
-        expect(deleted.statusCode, 204);
-        await waitFor(
-          tester,
-          () => find.text('$title updated').evaluate().isEmpty,
-        );
-      } finally {
-        await http.delete(Uri.parse('$api/api/books/$id'));
-      }
-
-      await tester.tap(find.text('Профиль').last);
-      await tester.pumpAndSettle();
-      expect(find.byType(ProfileScreen), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('Бронь QR кодын тексеру'), 150);
-      await tester.tap(find.text('Бронь QR кодын тексеру'));
-      await tester.pumpAndSettle();
-      expect(find.byType(QrScannerScreen), findsOneWidget);
-      expect(find.text('Камераға рұқсат беру'), findsOneWidget);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-
       final auth = tester
           .element(find.byType(app.MainNavigationContainer))
           .read<AuthProvider>();
+      expect(auth.role, 'reader');
+      final denied = await http.post(
+        Uri.parse('$api/api/books'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${auth.api!.sessionToken}',
+        },
+        body: jsonEncode({
+          'id': 'device_$suffix',
+          'title': 'Denied',
+          'author': 'Test',
+        }),
+      );
+      expect(denied.statusCode, 403);
+      await tester.tap(find.text('Профиль').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.text('Қызметкер бөлімі'), findsNothing);
+      expect(find.text('Бронь QR кодын тексеру'), findsNothing);
       await auth.logout();
       await waitFor(
         tester,

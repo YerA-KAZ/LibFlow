@@ -95,6 +95,62 @@ void main() {
     }
   });
 
+  test(
+    'Authenticated reader uses the server reservation and ignores cached QR',
+    () async {
+      final old = Book.fromMap({
+        'id': 'reader-book',
+        'isReserved': true,
+        'reservationCode': 'OLD-LOCAL-CODE',
+        'isFavorite': true,
+      });
+      await cache.replaceBooks([old]);
+      final book = {
+        'id': old.id,
+        'title': 'Reader book',
+        'author': 'Author',
+        'availableCopies': 1,
+        'totalCopies': 1,
+        'isAvailable': true,
+      };
+      final api = LibraryApiService(
+        client: MockClient((request) async {
+          expect(request.headers['authorization'], 'Bearer test-session');
+          return switch ((request.method, request.url.path)) {
+            ('GET', '/api/books') => jsonResponse(jsonEncode([book]), 200),
+            ('GET', '/api/reservations/mine') ||
+            ('GET', '/api/favorites') => jsonResponse('[]', 200),
+            ('POST', '/api/books/reader-book/reserve') => jsonResponse(
+              jsonEncode({
+                'book': {...book, 'availableCopies': 0, 'isAvailable': false},
+                'reservation': {
+                  'code': 'SERVER-QR',
+                  'status': 'reserved',
+                  'book_id': old.id,
+                  'created_at': DateTime.now().toIso8601String(),
+                },
+              }),
+              201,
+            ),
+            _ => throw StateError(
+              'Unexpected request: ${request.method} ${request.url.path}',
+            ),
+          };
+        }),
+      )..sessionToken = 'test-session';
+      final repository = LibraryRepository(api: api, cache: cache);
+      addTearDown(repository.dispose);
+
+      expect(await repository.refresh(), isTrue);
+      final fresh = repository.books.single;
+      expect(fresh.reservationCode, isNull);
+      expect(fresh.isFavorite, isFalse);
+      expect(await repository.update(fresh.copyWith(isReserved: true)), isTrue);
+      expect(repository.books.single.reservationCode, 'SERVER-QR');
+      expect(repository.books.single.availableCopies, 0);
+    },
+  );
+
   test('Disposed repository rejects further operations', () async {
     var requests = 0;
     final repository = LibraryRepository(

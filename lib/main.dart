@@ -13,6 +13,8 @@ import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/library_database_service.dart';
 import 'services/library_repository.dart';
+import 'services/library_api_service.dart';
+import 'screens/operations_screen.dart';
 import 'utils/constants.dart';
 import 'utils/library_theme.dart';
 import 'widgets/connection_banner.dart';
@@ -27,7 +29,8 @@ Future<void> main() async {
 }
 
 class LibFlowApp extends StatefulWidget {
-  const LibFlowApp({super.key});
+  const LibFlowApp({super.key, this.authApi});
+  final LibraryApiService? authApi;
 
   @override
   State<LibFlowApp> createState() => _LibFlowAppState();
@@ -45,7 +48,8 @@ class _LibFlowAppState extends State<LibFlowApp> {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AuthProvider()..restore(),
+      create: (_) =>
+          AuthProvider(api: widget.authApi ?? LibraryApiService())..restore(),
       child: MaterialApp(
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
@@ -60,6 +64,13 @@ class _LibFlowAppState extends State<LibFlowApp> {
               );
             }
             if (!auth.authenticated) return AuthScreen(onLoginSuccess: () {});
+            if (auth.isStaff) {
+              return OperationsScreen(
+                key: ValueKey(auth.user!['email']),
+                isDarkMode: _themeMode == ThemeMode.dark,
+                onThemeToggle: _toggleTheme,
+              );
+            }
             return MainNavigationContainer(
               key: ValueKey(auth.user!['email']),
               isDarkMode: _themeMode == ThemeMode.dark,
@@ -103,15 +114,23 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _repository = widget.repository ?? LibraryRepository();
+    final token = context.read<AuthProvider>().api?.sessionToken;
+    _repository =
+        widget.repository ??
+        LibraryRepository(api: LibraryApiService()..sessionToken = token);
     _repository.addListener(_repositoryChanged);
-    _books = _repository.books;
+    _books = _visibleBooks;
     _repository.refresh();
     if (widget.repository == null) _repository.startRealtime();
   }
 
+  List<Book> get _visibleBooks =>
+      _repository.api.sessionToken != null && !_repository.hasLoadedAccount
+      ? const []
+      : _repository.books;
+
   void _repositoryChanged() {
-    if (mounted) setState(() => _books = _repository.books);
+    if (mounted) setState(() => _books = _visibleBooks);
   }
 
   @override
@@ -182,10 +201,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
     return _repository.update(updated, reservationHistory: history);
   }
 
-  Future<bool> _handleBookAdd(Book book) => _repository.add(book);
-
-  Future<bool> _handleBookDelete(String id) => _repository.delete(id);
-
   void _openMyBooks(int tab) => setState(() {
     _myBooksTabIndex = tab;
     _myBooksRequest++;
@@ -216,12 +231,14 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
             context.watch<AuthProvider>().user?['name'] as String? ?? 'Оқырман',
         books: _books,
         onBookUpdated: _handleBookUpdate,
+        savedBook: _repository.cache.getBookById,
         onNavigateToCatalog: () => setState(() => _currentIndex = 1),
         onNavigateToMyBooks: () => _openMyBooks(1),
       ),
       CatalogScreen(
         books: _books,
         onBookUpdated: _handleBookUpdate,
+        savedBook: _repository.cache.getBookById,
         searchRequest: _searchRequest,
         loading: _repository.status == LibraryStatus.loading,
       ),
@@ -229,8 +246,12 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
         key: ValueKey(_myBooksRequest),
         books: _books,
         onBookUpdated: _handleBookUpdate,
+        savedBook: _repository.cache.getBookById,
         initialTabIndex: _myBooksTabIndex,
         onReservationFinished: _finishReservation,
+        serverHistory: _repository.api.sessionToken == null
+            ? null
+            : _repository.reservations,
         reservationHistory: _repository.cache.loans
             .where(
               (loan) =>
@@ -241,23 +262,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer>
             .toList(),
       ),
       ProfileScreen(
-        onOpenStaff: () => Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => ListenableBuilder(
-              listenable: _repository,
-              builder: (context, _) => CatalogScreen(
-                staff: true,
-                onReservationFinished: _finishReservation,
-                books: _repository.books,
-                loading: _repository.status == LibraryStatus.loading,
-                onBookUpdated: _handleBookUpdate,
-                onBookAdded: _handleBookAdd,
-                onBookDeleted: _handleBookDelete,
-              ),
-            ),
-          ),
-        ),
+        books: _books,
         onNavigateToFavorites: () => _openMyBooks(2),
         onNavigateToMyBooks: () => _openMyBooks(1),
         isDarkMode: widget.isDarkMode,

@@ -25,6 +25,12 @@ def client(monkeypatch):
     monkeypatch.setattr(module, 'connect', test_connect)
     try:
         with TestClient(module.app) as session:
+            from backend.access import add_account
+            credentials = {'email': 'admin@libflow.test', 'password': 'test-admin-password'}
+            with test_connect() as db:
+                add_account(db, credentials['email'], 'Test Admin', credentials['password'], 'admin')
+            token = session.post('/api/auth/login', json=credentials).json()['token']
+            session.headers['Authorization'] = f'Bearer {token}'
             yield session
     finally:
         with psycopg.connect(base_url, autocommit=True) as db:
@@ -94,3 +100,64 @@ def test_empty_catalogue_does_not_reseed(client):
         assert client.delete('/api/books/' + row['id']).status_code == 204
     with TestClient(module.app) as restarted:
         assert restarted.get('/api/books').json() == []
+
+
+
+def test_role_change_is_admin_only_and_revokes_sessions(client):
+    reader = {'email': 'reader@libflow.test', 'password': 'reader-test-password', 'name': 'Reader'}
+    assert client.post('/api/auth/register', json=reader | {'role': 'admin'}).status_code == 422
+    registered = client.post('/api/auth/register', json=reader)
+    assert registered.status_code == 201
+    account = registered.json()['user']
+    assert account['role'] == 'reader'
+    reader_headers = {'Authorization': 'Bearer ' + registered.json()['token'], 'X-Role': 'admin'}
+    path = f"/api/admin/users/{account['id']}/access"
+    change = {'role': 'librarian', 'blocked': False}
+    assert client.put(path, json=change, headers={'Authorization': ''}).status_code == 401
+    assert client.put(path, json=change, headers=reader_headers).status_code == 403
+    assert client.post('/api/books', json=book(), headers=reader_headers).status_code == 403
+    assert client.get('/api/staff/summary', headers=reader_headers).status_code == 403
+    assert client.put(path, json=change).json()['role'] == 'librarian'
+    assert client.get('/api/auth/me', headers=reader_headers).status_code == 401
+    login = client.post('/api/auth/login', json={key: reader[key] for key in ('email', 'password')})
+    staff_headers = {'Authorization': 'Bearer ' + login.json()['token']}
+    assert client.put(path, json={'role': 'admin', 'blocked': False}, headers=staff_headers).status_code == 403
+    assert client.post('/api/books', json=book(), headers=staff_headers).status_code == 201
+    admin_id = client.get('/api/auth/me').json()['id']
+    assert client.put(f'/api/admin/users/{admin_id}/access', json=change).status_code == 409
+    assert client.put(path, json=change | {'blocked': True}).status_code == 200
+    assert client.get('/api/staff/summary', headers=staff_headers).status_code == 401
+    assert len(client.get('/api/admin/audit').json()) == 2
+
+
+def test_reservation_ownership_stock_and_single_issue(client):
+    from datetime import date, timedelta
+
+    def reader(alias):
+        response = client.post('/api/auth/register', json={
+            'email': f'{alias}@libflow.test', 'password': 'reader-test-password', 'name': alias,
+        })
+        assert response.status_code == 201
+        return {'Authorization': 'Bearer ' + response.json()['token']}
+
+    first, second = reader('first'), reader('second')
+    data = book() | {'availableCopies': 1}
+    assert client.post('/api/books', json=data).status_code == 201
+    root = f"/api/books/{data['id']}"
+    response = client.post(root + '/reserve', headers=first)
+    assert response.status_code == 201
+    result = response.json()
+    code = result['reservation']['code']
+    assert result['book']['availableCopies'] == 0
+    assert client.get('/api/reservations/mine', headers=second).json() == []
+    assert client.post(f'/api/reservations/{code}/cancel', headers=second).status_code == 404
+    assert client.post(root + '/reserve', headers=second).status_code == 409
+    staff_path = f'/api/staff/reservations/{code}'
+    assert client.get(staff_path, headers=first).status_code == 403
+    assert client.get(staff_path).json()['display_status'] == 'reserved'
+    issue = {'due': (date.today() + timedelta(days=7)).isoformat()}
+    assert client.post(staff_path + '/issue', json=issue).status_code == 200
+    assert client.post(staff_path + '/issue', json=issue).status_code == 409
+    assert client.post(staff_path + '/return').json()['book']['availableCopies'] == 1
+    assert client.post(staff_path + '/return').status_code == 409
+    assert client.get('/api/reservations/mine', headers=first).json()[0]['status'] == 'returned'

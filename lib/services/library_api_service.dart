@@ -9,7 +9,8 @@ import '../models/book_model.dart';
 
 class LibraryApiException implements Exception {
   final String message;
-  const LibraryApiException(this.message);
+  final int? status;
+  const LibraryApiException(this.message, {this.status});
   @override
   String toString() => message;
 }
@@ -19,6 +20,7 @@ class LibraryApiService {
   final http.Client _client;
   final String baseUrl;
   final Duration timeout;
+  String? sessionToken;
 
   LibraryApiService({
     http.Client? client,
@@ -52,11 +54,17 @@ class LibraryApiService {
       Map.of(book.toMap())
         ..removeWhere((key, _) => personalFields.contains(key));
 
-  Future<dynamic> _request(String method, String path, [Book? book]) async {
+  Future<dynamic> request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
     try {
       final request = http.Request(method, Uri.parse('$resolvedBaseUrl$path'));
       request.headers['Content-Type'] = 'application/json; charset=utf-8';
-      if (book != null) request.body = jsonEncode(_payload(book));
+      final token = sessionToken;
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      if (body != null) request.body = jsonEncode(body);
       final response = await (() async {
         final streamed = await _client.send(request);
         return http.Response.fromStream(streamed);
@@ -68,7 +76,19 @@ class LibraryApiService {
           422 => 'Кітап деректері дұрыс емес. Өрістерді тексеріңіз.',
           _ => 'Сервер қатесі (${response.statusCode}). Қайта көріңіз.',
         };
-        throw LibraryApiException(message);
+        String? detail;
+        try {
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          if (data is Map && data['detail'] is String) {
+            detail = data['detail'] as String;
+          }
+        } on FormatException {
+          // Proxy responses may not contain JSON.
+        }
+        throw LibraryApiException(
+          detail ?? message,
+          status: response.statusCode,
+        );
       }
       if (response.statusCode == 204) return null;
       return jsonDecode(utf8.decode(response.bodyBytes));
@@ -90,7 +110,7 @@ class LibraryApiService {
   }
 
   Future<List<Book>> getBooks() async {
-    final data = await _request('GET', '/api/books');
+    final data = await request('GET', '/api/books');
     try {
       return (data as List)
           .map((item) => Book.fromMap(Map<String, dynamic>.from(item as Map)))
@@ -103,7 +123,7 @@ class LibraryApiService {
   }
 
   Future<Book> _save(String method, String path, Book book) async {
-    final data = await _request(method, path, book);
+    final data = await request(method, path, body: _payload(book));
     try {
       return Book.fromMap(Map<String, dynamic>.from(data as Map));
     } catch (_) {
@@ -117,7 +137,7 @@ class LibraryApiService {
   Future<Book> updateBook(Book book) =>
       _save('PUT', '/api/books/${Uri.encodeComponent(book.id)}', book);
   Future<void> deleteBook(String id) async {
-    await _request('DELETE', '/api/books/${Uri.encodeComponent(id)}');
+    await request('DELETE', '/api/books/${Uri.encodeComponent(id)}');
   }
 
   void close() => _client.close();

@@ -8,12 +8,13 @@ from typing import Annotated
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Response, WebSocket
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.realtime import hub
+from backend import access, circulation
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
@@ -97,10 +98,15 @@ async def lifespan(_app):
                 db.execute('INSERT INTO books(id, data) VALUES (%s, %s) ON CONFLICT DO NOTHING',
                            (book.id, Jsonb(book.model_dump())))
             db.execute('INSERT INTO schema_migrations(version) VALUES (1)')
+        access.migrate_access(db)
+        circulation.migrate_circulation(db)
     yield
 
 
 app = FastAPI(title='LibFlow REST API', version='1.0.0', lifespan=lifespan)
+access_router, current_account, staff_account = access.routes(lambda: connect())
+app.include_router(access_router)
+app.include_router(circulation.routes(lambda: connect(), current_account, staff_account))
 
 
 @app.websocket('/ws/catalogue')
@@ -112,7 +118,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv('CORS_ORIGINS', '').split(','),
     allow_methods=['GET', 'POST', 'PUT', 'DELETE'],
-    allow_headers=['Content-Type'],
+    allow_headers=['Content-Type', 'Authorization'],
 )
 
 
@@ -132,6 +138,14 @@ def health():
 @app.get('/api/books', response_model=list[BookRecord])
 def list_books(q: Annotated[str, Query(max_length=200)] = ''):
     with connect() as db:
+        expired_books = db.execute("""SELECT DISTINCT book_id FROM reservations
+            WHERE status = 'reserved' AND expires_at <= now() ORDER BY book_id""").fetchall()
+        for (book_id,) in expired_books:
+            try:
+                circulation.expire(db, circulation.stock(db, book_id))
+            except HTTPException as error:
+                if error.status_code != 404:
+                    raise
         rows = db.execute('''SELECT data FROM books
             WHERE %s = '' OR strpos(lower(data->>'title'), lower(%s)) > 0
             OR strpos(lower(data->>'author'), lower(%s)) > 0
@@ -149,7 +163,7 @@ def get_book(book_id: str):
     return row[0]
 
 
-@app.post('/api/books', response_model=BookRecord, status_code=201)
+@app.post('/api/books', response_model=BookRecord, status_code=201, dependencies=[Depends(staff_account)])
 def create_book(book: BookRecord, background_tasks: BackgroundTasks):
     with connect() as db:
         row = db.execute('''INSERT INTO books(id, data) VALUES (%s, %s)
@@ -161,11 +175,17 @@ def create_book(book: BookRecord, background_tasks: BackgroundTasks):
     return row[0]
 
 
-@app.put('/api/books/{book_id}', response_model=BookRecord)
+@app.put('/api/books/{book_id}', response_model=BookRecord, dependencies=[Depends(staff_account)])
 def update_book(book_id: str, book: BookRecord, background_tasks: BackgroundTasks):
     if book_id != book.id:
         raise HTTPException(422, 'URL және JSON ішіндегі ID бірдей болуы тиіс.')
     with connect() as db:
+        old = circulation.stock(db, book_id)
+        circulation.expire(db, old)
+        active = db.execute("""SELECT count(*) FROM reservations
+            WHERE book_id = %s AND status IN ('reserved', 'issued')""", (book_id,)).fetchone()[0]
+        if book.availableCopies + active > book.totalCopies:
+            raise HTTPException(409, 'Қор санын жаңартыңыз. Белсенді броньдар мен берілімдер бар.')
         row = db.execute('''UPDATE books SET data = %s, updated_at = now()
             WHERE id = %s RETURNING data''', (Jsonb(book.model_dump()), book_id)).fetchone()
     if row is None:
@@ -174,9 +194,14 @@ def update_book(book_id: str, book: BookRecord, background_tasks: BackgroundTask
     return row[0]
 
 
-@app.delete('/api/books/{book_id}', status_code=204)
+@app.delete('/api/books/{book_id}', status_code=204, dependencies=[Depends(staff_account)])
 def delete_book(book_id: str, background_tasks: BackgroundTasks):
     with connect() as db:
+        circulation.stock(db, book_id)
+        if db.execute("""SELECT 1 FROM reservations WHERE book_id = %s
+                AND (status = 'issued' OR (status = 'reserved' AND expires_at > now())) LIMIT 1""",
+                      (book_id,)).fetchone():
+            raise HTTPException(409, 'Белсенді бронь немесе берілім бар.')
         row = db.execute('DELETE FROM books WHERE id = %s RETURNING id', (book_id,)).fetchone()
     if row is None:
         raise HTTPException(404, 'Кітап табылмады.')

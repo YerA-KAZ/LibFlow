@@ -50,6 +50,10 @@ class LibraryDatabaseService {
   /// Деректер қорын инициализациялау (Database Initialization)
   Future<void> initializeDatabase() async {
     if (_isInitialized) return;
+    if (kIsWeb) {
+      _isInitialized = true;
+      return;
+    }
     var hasStoredBooks = false;
 
     try {
@@ -155,6 +159,7 @@ class LibraryDatabaseService {
 
   /// Локалды файлға барлық кестелерді тұрақты сақтау (Persist to Local Storage)
   Future<void> _persistDatabase() async {
+    if (kIsWeb) return;
     try {
       final file = await _getDatabaseFile();
       final data = {

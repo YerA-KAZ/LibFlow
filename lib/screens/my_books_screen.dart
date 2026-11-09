@@ -8,16 +8,20 @@ import 'book_detail_screen.dart';
 class MyBooksScreen extends StatefulWidget {
   final List<Book> books;
   final Future<bool> Function(Book) onBookUpdated;
+  final Book? Function(String)? savedBook;
   final int initialTabIndex;
   final List<Loan> reservationHistory;
+  final List<Map<String, dynamic>>? serverHistory;
   final Future<bool> Function(Book)? onReservationFinished;
 
   const MyBooksScreen({
     super.key,
     required this.books,
     required this.onBookUpdated,
+    this.savedBook,
     this.initialTabIndex = 0,
     this.reservationHistory = const [],
+    this.serverHistory,
     this.onReservationFinished,
   });
 
@@ -116,8 +120,11 @@ class _MyBooksScreenState extends State<MyBooksScreen>
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) =>
-            BookDetailScreen(book: book, onBookUpdated: widget.onBookUpdated),
+        builder: (_) => BookDetailScreen(
+          book: book,
+          onBookUpdated: widget.onBookUpdated,
+          savedBook: widget.savedBook,
+        ),
       ),
     );
   }
@@ -211,6 +218,44 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   }
 
   Widget _history() {
+    final remote = widget.serverHistory;
+    if (remote != null) {
+      final entries = remote
+          .where(
+            (entry) =>
+                (entry['display_status'] ?? entry['status']) != 'reserved',
+          )
+          .toList();
+      if (entries.isEmpty) {
+        return _list(
+          const [],
+          'Аяқталған броньдар жоқ',
+          Icons.history,
+          (_) => const SizedBox(),
+        );
+      }
+      return ListView.separated(
+        padding: const EdgeInsets.all(20),
+        itemCount: entries.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final entry = entries[index];
+          final status = switch (entry['display_status'] ?? entry['status']) {
+            'issued' => 'Кітап берілді',
+            'returned' => 'Кітап қайтарылды',
+            'expired' => 'Бронь мерзімі аяқталды',
+            _ => 'Бронь жойылды',
+          };
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.history),
+              title: Text(entry['title'] as String),
+              subtitle: Text(status),
+            ),
+          );
+        },
+      );
+    }
     if (widget.reservationHistory.isEmpty) {
       return _list(
         const [],

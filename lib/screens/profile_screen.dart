@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/book_model.dart';
 import '../services/auth_provider.dart';
 import '../services/library_database_service.dart';
 import 'library_card_screen.dart';
@@ -14,6 +15,7 @@ class ProfileScreen extends StatelessWidget {
   final VoidCallback onNavigateToFavorites;
   final VoidCallback onNavigateToMyBooks;
   final VoidCallback? onOpenStaff;
+  final List<Book>? books;
 
   const ProfileScreen({
     super.key,
@@ -23,11 +25,13 @@ class ProfileScreen extends StatelessWidget {
     required this.onNavigateToFavorites,
     required this.onNavigateToMyBooks,
     this.onOpenStaff,
+    this.books,
   });
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
     final name = (user?['name'] as String? ?? '').trim();
     final ticket = user?['ticket'] as String? ?? '';
     final theme = Theme.of(context);
@@ -113,7 +117,7 @@ class ProfileScreen extends StatelessWidget {
                       'Хабарламалар',
                       () => open(
                         NotificationsScreen(
-                          books: LibraryDatabaseService().books,
+                          books: books ?? LibraryDatabaseService().books,
                           onNavigateToMyBooks: onNavigateToMyBooks,
                         ),
                       ),
@@ -157,21 +161,22 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Card(
-                child: Column(
-                  children: [
-                    if (onOpenStaff != null) ...[
-                      _entry(Icons.shelves, 'Қызметкер бөлімі', onOpenStaff!),
-                      const Divider(height: 1),
+              if (auth.api == null || auth.isStaff)
+                Card(
+                  child: Column(
+                    children: [
+                      if (onOpenStaff != null) ...[
+                        _entry(Icons.shelves, 'Қызметкер бөлімі', onOpenStaff!),
+                        const Divider(height: 1),
+                      ],
+                      _entry(
+                        Icons.qr_code_scanner,
+                        'Бронь QR кодын тексеру',
+                        () => open(const QrScannerScreen()),
+                      ),
                     ],
-                    _entry(
-                      Icons.qr_code_scanner,
-                      'Бронь QR кодын тексеру',
-                      () => open(const QrScannerScreen()),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
               const SizedBox(height: 20),
               OutlinedButton.icon(
                 icon: const Icon(Icons.logout),

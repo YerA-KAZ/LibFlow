@@ -21,12 +21,14 @@ class BookDetailScreen extends StatefulWidget {
   final bool staff;
   final Future<bool> Function(Book)? onBookAdded;
   final Future<bool> Function(Book updatedBook) onBookUpdated;
+  final Book? Function(String)? savedBook;
   final Future<bool> Function(String bookId)? onBookDeleted;
 
   const BookDetailScreen({
     super.key,
     required this.book,
     required this.onBookUpdated,
+    this.savedBook,
     this.onBookDeleted,
     this.onBookAdded,
     this.inCollection = true,
@@ -125,7 +127,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (!mounted) return;
     setState(() {
       _isMutating = false;
-      if (saved) _book = updated;
+      if (saved) _book = widget.savedBook?.call(updated.id) ?? updated;
     });
     if (!saved) _showMutationError();
   }
@@ -162,7 +164,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (!mounted) return;
     setState(() {
       _isMutating = false;
-      if (saved) _book = updated;
+      if (saved) _book = widget.savedBook?.call(updated.id) ?? updated;
     });
     if (!saved) {
       _showMutationError();

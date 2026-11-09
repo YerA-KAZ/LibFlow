@@ -13,9 +13,11 @@ enum CatalogSource { localOnly, all, openLibrary, googleBooks }
 class CatalogScreen extends StatefulWidget {
   final List<Book> books;
   final Future<bool> Function(Book) onBookUpdated;
+  final Book? Function(String)? savedBook;
   final Future<bool> Function(Book)? onBookAdded;
   final Future<bool> Function(String bookId)? onBookDeleted;
   final bool staff;
+  final VoidCallback? onScan;
   final Future<bool> Function(Book)? onReservationFinished;
   final int searchRequest;
   final bool loading;
@@ -24,9 +26,11 @@ class CatalogScreen extends StatefulWidget {
     super.key,
     required this.books,
     required this.onBookUpdated,
+    this.savedBook,
     this.onBookAdded,
     this.onBookDeleted,
     this.staff = false,
+    this.onScan,
     this.onReservationFinished,
     this.searchRequest = 0,
     this.loading = false,
@@ -268,14 +272,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
             IconButton(
               tooltip: 'Бронь QR кодын тексеру',
               icon: const Icon(Icons.qr_code_scanner_rounded),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => QrScannerScreen(
-                    onBookUpdated: widget.onReservationFinished,
+              onPressed:
+                  widget.onScan ??
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => QrScannerScreen(
+                        onBookUpdated: widget.onReservationFinished,
+                      ),
+                    ),
                   ),
-                ),
-              ),
             ),
           if (widget.staff && widget.onBookAdded != null)
             IconButton(
@@ -464,6 +470,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   ? widget.onBookAdded
                                   : null,
                               onBookUpdated: widget.onBookUpdated,
+                              savedBook: widget.savedBook,
                               onBookDeleted: widget.staff
                                   ? widget.onBookDeleted
                                   : null,

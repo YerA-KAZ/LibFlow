@@ -9,6 +9,7 @@ import 'ereader_screen.dart';
 class HomeScreen extends StatelessWidget {
   final List<Book> books;
   final Future<bool> Function(Book) onBookUpdated;
+  final Book? Function(String)? savedBook;
   final VoidCallback onNavigateToCatalog;
   final VoidCallback onNavigateToMyBooks;
   final String readerName;
@@ -20,6 +21,7 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.books,
     required this.onBookUpdated,
+    this.savedBook,
     required this.onNavigateToCatalog,
     required this.onNavigateToMyBooks,
     this.readerName = 'Оқырман',
@@ -32,8 +34,11 @@ class HomeScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) =>
-            BookDetailScreen(book: book, onBookUpdated: onBookUpdated),
+        builder: (_) => BookDetailScreen(
+          book: book,
+          onBookUpdated: onBookUpdated,
+          savedBook: savedBook,
+        ),
       ),
     );
   }

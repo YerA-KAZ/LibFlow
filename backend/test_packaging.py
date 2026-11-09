@@ -10,7 +10,7 @@ def test_docker_package_import_in_clean_directory(tmp_path):
     root = Path(__file__).parent
     package = tmp_path / 'backend'
     package.mkdir()
-    for name in ['__init__.py', 'app.py', 'realtime.py', 'seed_books.json']:
+    for name in ['__init__.py', 'app.py', 'realtime.py', 'access.py', 'circulation.py', 'create_admin.py', 'seed_books.json']:
         copy2(root / name, package / name)
     environment = dict(os.environ, PYTHONPATH=str(tmp_path))
     result = subprocess.run(
@@ -22,5 +22,5 @@ def test_docker_package_import_in_clean_directory(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == 'package import OK'
     dockerfile = (root / 'Dockerfile').read_text()
-    assert 'COPY __init__.py app.py realtime.py seed_books.json ./backend/' in dockerfile
+    assert 'COPY __init__.py app.py realtime.py access.py circulation.py create_admin.py seed_books.json ./backend/' in dockerfile
     assert '"backend.app:app"' in dockerfile

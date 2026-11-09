@@ -22,8 +22,9 @@ String reservationResult(String code, LibraryDatabaseService database) {
 }
 
 class QrScannerScreen extends StatefulWidget {
-  const QrScannerScreen({super.key, this.onBookUpdated});
+  const QrScannerScreen({super.key, this.onBookUpdated, this.onCheck});
   final Future<bool> Function(Book)? onBookUpdated;
+  final Future<void> Function(String)? onCheck;
   @override
   State<QrScannerScreen> createState() => _QrScannerScreenState();
 }
@@ -99,6 +100,14 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       return;
     }
     processing = true;
+    if (widget.onCheck != null) {
+      try {
+        await widget.onCheck!(code);
+      } finally {
+        processing = false;
+      }
+      return;
+    }
     final database = LibraryDatabaseService();
     final book = database.books
         .where(
@@ -186,9 +195,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
             children: [
               Text('Броньды тексеру', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
-              const Text(
-                'Осы құрылғыда сақталған броньды QR арқылы немесе кодты енгізіп тексеріңіз.',
-              ),
+              const Text('Броньды QR арқылы немесе кодты енгізіп тексеріңіз.'),
               const SizedBox(height: 16),
               if (camera != null)
                 ClipRRect(

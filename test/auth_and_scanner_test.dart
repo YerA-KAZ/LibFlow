@@ -5,6 +5,10 @@ import 'package:libflow/models/book_model.dart';
 import 'package:libflow/services/library_database_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:libflow/screens/operations_screen.dart';
+import 'package:libflow/services/library_api_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:libflow/services/auth_provider.dart';
@@ -130,38 +134,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Email дұрыс емес'), findsOneWidget);
   });
-  testWidgets(
-    'Restored session opens app and logout closes protected screens',
-    (tester) async {
-      FlutterSecureStorage.setMockInitialValues({
-        'accounts': jsonEncode({
-          'a@test.kz': {
-            'name': 'Айша',
-            'email': 'a@test.kz',
-            'ticket': 'LF-TEST',
-          },
-        }),
-        'session': jsonEncode({
-          'email': 'a@test.kz',
-          'expiresAt': DateTime.now()
-              .add(const Duration(days: 1))
-              .toIso8601String(),
-        }),
-      });
-      await tester.pumpWidget(const LibFlowApp());
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pumpAndSettle();
-      expect(find.byType(MainNavigationContainer), findsOneWidget);
-      final auth = tester
-          .element(find.byType(MainNavigationContainer))
-          .read<AuthProvider>();
-      await auth.logout();
-      await tester.pumpAndSettle();
-      expect(find.byType(AuthScreen), findsOneWidget);
-      expect(find.byType(MainNavigationContainer), findsNothing);
-    },
-  );
+  for (final role in ['reader', 'librarian', 'admin']) {
+    testWidgets(
+      'Restored $role session opens its workspace and logout closes it',
+      (tester) async {
+        FlutterSecureStorage.setMockInitialValues({
+          'server_session': 'TEST-TOKEN',
+        });
+        final api = LibraryApiService(
+          client: MockClient((request) async {
+            expect(request.headers['authorization'], 'Bearer TEST-TOKEN');
+            if (request.url.path == '/api/auth/logout') {
+              return http.Response('', 204);
+            }
+            if (request.url.path == '/api/staff/summary') {
+              return http.Response(
+                '{"books":0,"copies":0,"available":0,"reserved":0,"issued":0,"overdue":0,"accounts":0,"librarians":0}',
+                200,
+              );
+            }
+            expect(request.url.path, '/api/auth/me');
+            return http.Response(
+              jsonEncode({
+                'name': 'Айша',
+                'email': 'a@test.kz',
+                'ticket': 'LF-TEST',
+                'role': role,
+              }),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }),
+        );
+        await tester.pumpWidget(LibFlowApp(authApi: api));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        final workspace = find.byType(
+          role == 'reader' ? MainNavigationContainer : OperationsScreen,
+        );
+        expect(workspace, findsOneWidget);
+        final auth = tester.element(workspace).read<AuthProvider>();
+        expect(auth.role, role);
+        await auth.logout();
+        await tester.pumpAndSettle();
+        expect(find.byType(AuthScreen), findsOneWidget);
+        expect(workspace, findsNothing);
+      },
+    );
+  }
   testWidgets('Scanner route rejects unauthenticated users', (tester) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
